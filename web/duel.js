@@ -1,16 +1,19 @@
-// 对战界面。引擎(DuelGame / greedyMove)由 build.mjs 从 diffusion.ts + duel.ts
+// 对战界面。引擎(DuelGame / greedyTurn)由 build.mjs 从 diffusion.ts + duel.ts
 // 擦除类型后拼在本文件前面。
 
 const $ = (id) => document.getElementById(id);
 const NAME = { 1: "橙方", [-1]: "青方" };
 const RGB = { 1: [255, 159, 67], [-1]: [62, 198, 224], 0: [22, 22, 29] };
-const TICK_MS = 30;
-const ANIM_TICKS = 45; // 一次沉降的动画大约分这么多帧播完
+const ARROWS = ["↑", "→", "↓", "←"]; // 与引擎 上→右→下→左 的顺序一致
+const BOT_SHOW_MS = 700; // 电脑放好后停一下,让人看清它放在哪
 
 let game = null;
-let busy = false; // 正在播扩散动画或等电脑落子
+let phase = "place"; // place 放泉 | flow 扩散中 | over 终局
+let paused = false;
 let timer = null;
 let last = null; // 最近一步 DuelStep
+let flowSteps = 0;
+let stepMs = 450;
 
 function wallPreset(n, kind) {
   const m = (n - 1) / 2, out = [];
@@ -26,11 +29,12 @@ function newGame() {
   const n = Number($("size").value);
   game = new DuelGame(n, n, {
     maxRounds: Number($("rounds").value),
-    perTurn: Number($("perTurn").value),
+    budget: Number($("budget").value),
     ratio: Number($("ratio").value),
     walls: wallPreset(n, $("walls").value),
   });
-  busy = false;
+  phase = "place";
+  paused = false;
   last = null;
   $("log").textContent = "";
   $("r-ratio").textContent = ` ${game.ratio} `;
@@ -49,7 +53,8 @@ function newGame() {
   botIfNeeded();
 }
 
-const botPlays = () => $("rival").value === "bot" && game.turn === -1 && game.winner === null;
+const botPlays = () => $("rival").value === "bot" && game.turn === -1 && phase === "place";
+const humanPlacing = () => phase === "place" && !botPlays();
 
 function log(text, side) {
   const li = document.createElement("li");
@@ -58,67 +63,137 @@ function log(text, side) {
   $("log").prepend(li);
 }
 
-function move(r, c) {
-  const side = game.turn, round = game.round;
-  if (!game.place(r, c)) return;
-  last = null;
-  log(`第 ${round} 轮 ${NAME[side]} 放泉 (${r},${c})`, side);
-  if (game.left > 0) { // 本回合还有泉没放
-    render();
-    return botIfNeeded();
-  }
-  busy = true;
-  animate(() => {
-    const before = game.captures;
-    game.endTurn();
-    busy = false;
-    last = null;
-    if (game.captures > before) log(`易主 ${game.captures - before} 格`);
-    if (game.winner !== null) {
-      const { a, b } = game.count();
-      log(game.winner === 0 ? `平局 ${a} : ${b}` : `${NAME[game.winner]}胜 ${a} : ${b}`, game.winner);
-    }
-    render();
-    botIfNeeded();
-  });
+/* ---------------- 放泉 ---------------- */
+
+function describePlacement() {
+  const piles = new Map();
+  for (const p of game.placed) piles.set(`${p.r},${p.c}`, (piles.get(`${p.r},${p.c}`) ?? 0) + 1);
+  return [...piles].map(([k, n]) => `(${k})×${n}`).join(" ") || "未放";
 }
 
-function animate(done) {
-  if ($("skip").checked) {
-    game.settle();
-    return done();
-  }
-  const preview = game.clone();
-  const batch = Math.max(1, Math.ceil(preview.settle() / ANIM_TICKS));
-  const tick = () => {
-    for (let i = 0; i < batch; i++) {
-      const s = game.step();
-      if (!s) return done();
-      last = s;
-    }
-    render();
-    timer = setTimeout(tick, TICK_MS);
-  };
+function confirmPlacement() {
+  if (phase !== "place") return;
+  log(`第 ${game.round} 轮 ${NAME[game.turn]} ${describePlacement()}`, game.turn);
+  phase = "flow";
+  paused = false;
+  last = null;
+  flowSteps = 0;
   render();
-  tick();
+  flowTick();
 }
 
 function botIfNeeded() {
   if (!botPlays()) return;
-  busy = true;
   render();
   timer = setTimeout(() => {
-    const m = greedyMove(game);
-    busy = false;
-    if (m) move(m.r, m.c);
-  }, 300);
+    for (const p of greedyTurn(game)) game.add(p.r, p.c);
+    render();
+    timer = setTimeout(confirmPlacement, stepMs ? BOT_SHOW_MS : 0);
+  }, 50);
+}
+
+/* ---------------- 扩散 ---------------- */
+
+function flowStep() {
+  const s = game.step();
+  if (!s) return finishTurn(), false;
+  last = s;
+  flowSteps++;
+  return true;
+}
+
+function flowTick() {
+  clearTimeout(timer);
+  if (phase !== "flow" || paused) return;
+  if (stepMs === 0) {
+    while (flowStep());
+    return;
+  }
+  if (flowStep()) {
+    render();
+    timer = setTimeout(flowTick, stepMs);
+  }
+}
+
+function finishTurn() {
+  clearTimeout(timer);
+  const side = game.turn, before = game.captures, was = game.count();
+  game.endTurn();
+  last = null;
+  const now = game.count();
+  if (side === -1 || game.resolve === "turn") {
+    const gain = (x) => (x >= 0 ? `+${x}` : `${x}`);
+    log(`结算：橙 ${now.a}（${gain(now.a - was.a)}） 青 ${now.b}（${gain(now.b - was.b)}）`
+      + (game.captures > before ? `，易主 ${game.captures - before} 格` : ""));
+  }
+  if (game.winner !== null) {
+    phase = "over";
+    log(game.winner === 0 ? `平局 ${now.a} : ${now.b}` : `${NAME[game.winner]}胜 ${now.a} : ${now.b}`, game.winner);
+  } else phase = "place";
+  render();
+  botIfNeeded();
+}
+
+/* ---------------- 输入 ---------------- */
+
+function cellOf(ev) {
+  const d = ev.target.closest(".cell");
+  return d ? [Number(d.dataset.r), Number(d.dataset.c)] : null;
 }
 
 $("board").addEventListener("click", (ev) => {
-  const d = ev.target.closest(".cell");
-  if (!d || busy || botPlays()) return;
-  move(Number(d.dataset.r), Number(d.dataset.c));
+  const p = cellOf(ev);
+  if (p && humanPlacing() && game.add(...p)) render();
 });
+$("board").addEventListener("contextmenu", (ev) => {
+  const p = cellOf(ev);
+  if (!p) return;
+  ev.preventDefault();
+  if (humanPlacing() && game.take(...p)) render();
+});
+
+const undo = () => { if (humanPlacing() && game.take()) render(); };
+const togglePause = () => {
+  if (phase !== "flow") return;
+  paused = !paused;
+  render();
+  flowTick();
+};
+const oneStep = () => {
+  if (phase !== "flow") return;
+  paused = true;
+  clearTimeout(timer);
+  flowStep();
+  render();
+};
+const skipFlow = () => {
+  if (phase !== "flow") return;
+  clearTimeout(timer);
+  while (flowStep());
+};
+
+$("undo").addEventListener("click", undo);
+$("confirm").addEventListener("click", () => { if (humanPlacing()) confirmPlacement(); });
+$("pause").addEventListener("click", togglePause);
+$("one").addEventListener("click", oneStep);
+$("skip").addEventListener("click", skipFlow);
+
+for (const b of $("speed").children)
+  b.addEventListener("click", () => {
+    stepMs = Number(b.dataset.ms);
+    for (const x of $("speed").children) x.classList.toggle("on", x === b);
+    flowTick();
+  });
+
+window.addEventListener("keydown", (ev) => {
+  if (ev.target.matches?.("select, input") || ev.ctrlKey || ev.metaKey || ev.altKey) return;
+  if (ev.key === "Enter" && !ev.target.matches?.("button")) { if (humanPlacing()) confirmPlacement(); }
+  else if (ev.key === "z" || ev.key === "Z" || ev.key === "Backspace") undo();
+  else if (ev.key === " ") { ev.preventDefault(); togglePause(); }
+  else if (ev.key === "ArrowRight") oneStep();
+});
+
+/* ---------------- 渲染 ---------------- */
 
 function shade(side, mag) {
   const t = 0.3 + (mag / 9) * 0.7, a = RGB[side], z = RGB[0];
@@ -133,11 +208,10 @@ function span(cls, text) {
 }
 
 function render() {
-  const canClick = !busy && game.winner === null && !botPlays();
+  const placing = humanPlacing();
 
   for (const d of $("board").children) {
     const r = Number(d.dataset.r), c = Number(d.dataset.c);
-    const spring = game.springAt(r, c);
     d.className = "cell";
     d.removeAttribute("data-v");
     d.style.background = d.style.color = "";
@@ -163,9 +237,18 @@ function render() {
       d.dataset.v = 0;
       d.textContent = 0;
     }
-    if (spring) d.classList.add("source", spring.side === 1 ? "sa" : "sb");
-    if (canClick && game.canPlace(r, c)) d.classList.add("legal");
-    if (last && last.src.r === r && last.src.c === c) d.classList.add("src");
+
+    const pending = phase === "place" ? game.placedAt(r, c) : 0;
+    if (pending) {
+      d.classList.add("pending", game.turn === 1 ? "pa" : "pb");
+      d.append(span("plus", `+${pending}`));
+    }
+    if (placing && game.canAdd(r, c)) d.classList.add("legal");
+    if (last && last.src.r === r && last.src.c === c) {
+      d.classList.add("src");
+      const dir = last.dst.r < r ? 0 : last.dst.c > c ? 1 : last.dst.r > r ? 2 : 3;
+      d.append(span(`arrow d${dir}`, `${ARROWS[dir]}${last.moved}`));
+    }
     if (last && last.dst.r === r && last.dst.c === c) d.classList.add("dst");
   }
 
@@ -179,22 +262,34 @@ function render() {
 
   const st = $("status");
   const cls = (s) => (s === 1 ? "ta" : "tb");
-  if (game.winner !== null) {
+  const who = `<b class="${cls(game.turn)}">${NAME[game.turn]}</b>`;
+  const head = `第 ${game.round} / ${game.maxRounds} 轮 · ${who}`;
+  if (phase === "over") {
     st.innerHTML = game.winner === 0
       ? `<b>平局</b>，${a} : ${b}。`
       : `<b class="${cls(game.winner)}">${NAME[game.winner]}获胜</b>，${a} : ${b}。`;
+  } else if (phase === "flow") {
+    st.innerHTML = last
+      ? `${head} 扩散第 <b>${flowSteps}</b> 步：(${last.src.r},${last.src.c}) → (${last.dst.r},${last.dst.c}) 搬运 <b>${last.moved}</b>${paused ? " · 已暂停" : ""}`
+      : `${head} 扩散中…`;
+  } else if (botPlays()) {
+    st.innerHTML = `${head} ${game.placed.length ? "已放好" : "思考中…"}`;
   } else {
-    const who = `<b class="${cls(game.turn)}">${NAME[game.turn]}</b>`;
-    const doing = game.left === 0 ? "扩散中…"
-      : botPlays() ? "思考中…"
-      : `放泉，还剩 <b>${game.left}</b> 个`;
-    st.innerHTML = `第 ${game.round} / ${game.maxRounds} 轮 · ${who} ${doing}`;
+    st.innerHTML = `${head} 放泉，还剩 <b>${game.left}</b> / ${game.budget} 个`;
   }
-  document.body.dataset.turn = game.winner === null ? game.turn : 0;
+
+  $("act-place").hidden = phase === "flow";
+  $("act-flow").hidden = phase !== "flow";
+  $("undo").disabled = !placing || game.placed.length === 0;
+  $("confirm").disabled = !placing;
+  $("confirm").textContent = placing && game.left > 0 && game.placed.length
+    ? `确认放置（${game.left} 个作废）` : "确认放置";
+  $("pause").textContent = paused ? "继续" : "暂停";
+  document.body.dataset.turn = phase === "over" ? 0 : game.turn;
 }
 
 $("new").addEventListener("click", newGame);
-for (const id of ["size", "rounds", "perTurn", "ratio", "walls", "rival"])
+for (const id of ["size", "rounds", "budget", "ratio", "walls", "rival"])
   $(id).addEventListener("change", newGame);
 
 newGame();

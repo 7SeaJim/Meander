@@ -1,22 +1,19 @@
 /**
- * 擴散對戰(草案 2)— 兩層水 + 倍數奪格
+ * 擴散對戰(草案 3)— 分配泉量 + 兩層水 + 倍數奪格
  *
  * 兩方各有一層水,每層都是一塊 Ver.1.1 的 DiffusionBoard,互不干擾地擴散;
  * 牆對兩層相同。同一格可以同時有兩方的水。
  *
- * 歸屬只在盤面靜止時結算,對每一格(己方值 x、對方值 y):
+ * 回合:每回合得到 budget 個泉,自由分配 —— 每放 1 個泉,該格己方水量 +1(單格上限 9)。
+ * 可以全壓在一格,也可以每格放 1,或任意拆分。不能放在牆或對方佔領的格上。
+ * 確認後只有落子方那一層擴散到靜止(泉是一次性倒下的水,之後不再補)。
+ *
+ * 歸屬在盤面靜止時結算,對每一格(己方值 x、對方值 y):
  *  - x > 0 且 x ≥ ratio·y  → 歸己方(y = 0 時任何正值即可佔領)
  *  - 雙方都不滿足           → sticky 時維持原主,否則變為無主
- * 即:要從對方手裡奪格,或拿下雙方都有水的爭奪格,須達到對方的 ratio 倍。
+ * resolve = "round" 時一輪(雙方各一回合)結束才結算;"turn" 時每回合結束都結算。
  *
- * 對局:每回合固定 perTurn 個泉,可放在任意幾個合法格(非牆、無泉、非對方佔領格)。
- * 泉注入時把己方那一層的該格重置為 9。一輪(雙方各一回合)結束時佔領過半者勝;
- * 否則打滿 maxRounds 後比佔領格數。
- *
- * 注入時機(InjectMode):
- *  - "round" 雙方都放完後一起注入一次(預設)
- *  - "all"   每回合之後全部泉注入
- *  - "mine"  每回合之後只注入落子方的泉
+ * 一輪結束時佔領過半者勝;否則打滿 maxRounds 後比佔領格數。
  */
 
 import { DiffusionBoard, WALL } from "./diffusion.ts";
@@ -24,42 +21,42 @@ import type { Pos, StepResult, Strategy } from "./diffusion.ts";
 
 export type Side = 1 | -1;
 export type Owner = Side | 0;
-export type InjectMode = "all" | "mine" | "round";
+export type ResolveMode = "round" | "turn";
 
-export interface Spring extends Pos { side: Side }
 export interface DuelStep extends StepResult { side: Side }
 
 export interface DuelOptions {
   maxRounds?: number;
-  perTurn?: number;
+  budget?: number;
   ratio?: number;
   sticky?: boolean;
-  inject?: InjectMode;
+  resolve?: ResolveMode;
   walls?: Pos[];
   strategy?: Strategy;
 }
 
-export const SPRING_VALUE = 9;
+export const CELL_MAX = 9;
 
 export class DuelGame {
   readonly rows: number;
   readonly cols: number;
   readonly maxRounds: number;
-  readonly perTurn: number;
+  readonly budget: number;
   readonly ratio: number;
   readonly sticky: boolean;
-  readonly inject: InjectMode;
+  readonly resolve: ResolveMode;
   readonly strategy: Strategy;
 
   private orange: DiffusionBoard;
   private cyan: DiffusionBoard;
   private owners: Owner[];
 
-  springs: Spring[] = [];
   turn: Side = 1;
   round = 1;
-  /** 本回合還能放幾個泉 */
+  /** 本回合還剩幾個泉 */
   left: number;
+  /** 本回合已放的泉,逐個記錄,供撤回 */
+  placed: Pos[] = [];
   /** null 未結束;0 平局 */
   winner: Owner | null = null;
   /** 累計易主次數(從一方直接到另一方) */
@@ -69,15 +66,15 @@ export class DuelGame {
     this.rows = rows;
     this.cols = cols;
     this.maxRounds = opts.maxRounds ?? 8;
-    this.perTurn = opts.perTurn ?? 2;
+    this.budget = opts.budget ?? 9;
     this.ratio = opts.ratio ?? 2;
     this.sticky = opts.sticky ?? true;
-    this.inject = opts.inject ?? "round";
+    this.resolve = opts.resolve ?? "round";
     this.strategy = opts.strategy ?? "fifo";
     this.orange = new DiffusionBoard(rows, cols);
     this.cyan = new DiffusionBoard(rows, cols);
     this.owners = new Array(rows * cols).fill(0);
-    this.left = this.perTurn;
+    this.left = this.budget;
     for (const w of opts.walls ?? []) {
       this.orange.set(w.r, w.c, WALL);
       this.cyan.set(w.r, w.c, WALL);
@@ -86,16 +83,16 @@ export class DuelGame {
 
   clone(): DuelGame {
     const g = new DuelGame(this.rows, this.cols, {
-      maxRounds: this.maxRounds, perTurn: this.perTurn, ratio: this.ratio,
-      sticky: this.sticky, inject: this.inject, strategy: this.strategy,
+      maxRounds: this.maxRounds, budget: this.budget, ratio: this.ratio,
+      sticky: this.sticky, resolve: this.resolve, strategy: this.strategy,
     });
     g.orange = this.orange.clone();
     g.cyan = this.cyan.clone();
     g.owners = this.owners.slice();
-    g.springs = this.springs.slice();
     g.turn = this.turn;
     g.round = this.round;
     g.left = this.left;
+    g.placed = this.placed.slice();
     g.winner = this.winner;
     g.captures = this.captures;
     return g;
@@ -128,61 +125,55 @@ export class DuelGame {
     return { a, b, open };
   }
 
-  springAt(r: number, c: number): Spring | undefined {
-    return this.springs.find(s => s.r === r && s.c === c);
+  /** 本回合在該格已放了幾個泉 */
+  placedAt(r: number, c: number): number {
+    return this.placed.filter(p => p.r === r && p.c === c).length;
   }
 
-  canPlace(r: number, c: number, side: Side = this.turn): boolean {
+  canAdd(r: number, c: number): boolean {
     if (this.winner !== null || this.left <= 0 || this.isWall(r, c)) return false;
-    if (this.springAt(r, c)) return false;
-    return this.owner(r, c) !== -side;
+    if (this.owner(r, c) === -this.turn) return false;
+    return this.value(r, c, this.turn) < CELL_MAX;
   }
 
-  legalCells(side: Side = this.turn): Pos[] {
+  legalCells(): Pos[] {
     const out: Pos[] = [];
     for (let r = 0; r < this.rows; r++)
       for (let c = 0; c < this.cols; c++)
-        if (this.canPlace(r, c, side)) out.push({ r, c });
+        if (this.canAdd(r, c)) out.push({ r, c });
     return out;
   }
 
-  /** 把泉所在格重置為 9;給 side 則只注入該方的泉 */
-  injectSprings(side?: Side): void {
-    for (const s of this.springs)
-      if (side === undefined || s.side === side)
-        this.layer(s.side).set(s.r, s.c, SPRING_VALUE);
-  }
-
-  /**
-   * 放一個泉。本回合的泉放完(left 歸零,或已無合法格)時按注入時機注入;
-   * 之後盤面需沉降(逐步 step 做動畫,或 settle),再調 endTurn。
-   */
-  place(r: number, c: number): boolean {
-    if (!this.canPlace(r, c)) return false;
-    this.springs.push({ r, c, side: this.turn });
+  /** 在該格放 1 個泉(己方水量 +1) */
+  add(r: number, c: number): boolean {
+    if (!this.canAdd(r, c)) return false;
+    const b = this.layer(this.turn);
+    b.set(r, c, b.get(r, c) + 1);
+    this.placed.push({ r, c });
     this.left--;
-    if (this.left > 0 && this.legalCells().length === 0) this.left = 0;
-    if (this.left === 0) {
-      if (this.inject === "all") this.injectSprings();
-      else if (this.inject === "mine") this.injectSprings(this.turn);
-      else if (this.turn === -1) this.injectSprings();
-    }
     return true;
   }
 
-  /** 兩層各自擴散;每步取主格值較大的那一層,只為讓動畫交錯 */
+  /** 收回本回合放在該格的 1 個泉;不給座標則收回最後放的那個 */
+  take(r?: number, c?: number): boolean {
+    let i = this.placed.length - 1;
+    if (r !== undefined) while (i >= 0 && (this.placed[i].r !== r || this.placed[i].c !== c)) i--;
+    if (i < 0) return false;
+    const [p] = this.placed.splice(i, 1);
+    const b = this.layer(this.turn);
+    b.set(p.r, p.c, b.get(p.r, p.c) - 1);
+    this.left++;
+    return true;
+  }
+
+  /** 落子方那一層擴散一步;已靜止返回 null */
   step(): DuelStep | null {
-    const pa = this.orange.pickSource(this.strategy);
-    const pb = this.cyan.pickSource(this.strategy);
-    if (!pa && !pb) return null;
-    const side: Side =
-      !pb || (pa && this.orange.get(pa.r, pa.c) >= this.cyan.get(pb.r, pb.c)) ? 1 : -1;
-    const res = this.layer(side).step(this.strategy)!;
-    return { ...res, side };
+    const res = this.layer(this.turn).step(this.strategy);
+    return res ? { ...res, side: this.turn } : null;
   }
 
   settle(): number {
-    return this.orange.settle(this.strategy).length + this.cyan.settle(this.strategy).length;
+    return this.layer(this.turn).settle(this.strategy).length;
   }
 
   /** 靜止時結算歸屬(倍數奪格) */
@@ -202,9 +193,9 @@ export class DuelGame {
       }
   }
 
-  /** 盤面靜止後調用:結算歸屬、判定勝負、換手 */
+  /** 盤面靜止後調用:結算歸屬、判定勝負、換手。沒用完的泉作廢 */
   endTurn(): void {
-    this.resolveOwners();
+    if (this.resolve === "turn" || this.turn === -1) this.resolveOwners();
     const { a, b, open } = this.count();
     const byCount = (): Owner => (a > b ? 1 : b > a ? -1 : 0);
     if (this.turn === -1) {
@@ -215,41 +206,53 @@ export class DuelGame {
     }
     if (this.winner !== null) return;
     this.turn = this.turn === 1 ? -1 : 1;
-    this.left = this.perTurn;
-    if (this.legalCells().length === 0) this.winner = byCount();
+    this.left = this.budget;
+    this.placed = [];
   }
 
-  /** 不要動畫時:放一個泉,回合放完就沉降並換手 */
-  play(r: number, c: number): boolean {
-    if (!this.place(r, c)) return false;
-    if (this.left === 0) {
-      this.settle();
-      this.endTurn();
-    }
-    return true;
+  /** 不要動畫時:按 cells 逐個放泉(可重複同一格),然後沉降並換手 */
+  playTurn(cells: Pos[]): void {
+    for (const p of cells) this.add(p.r, p.c);
+    this.settle();
+    this.endTurn();
   }
 
-  /** 假設此刻全部泉注入並沉降,side 一方的格數差(預演,不改本局) */
-  preview(side: Side): number {
+  /** 假設此刻確認並結算,當前方的格數差(預演,不改本局) */
+  preview(): number {
     const g = this.clone();
-    g.injectSprings();
     g.settle();
     g.resolveOwners();
     const { a, b } = g.count();
-    return side * (a - b);
+    return this.turn * (a - b);
   }
 }
 
-/** 貪心:為當前這一個泉選預演格數差最大的位置,同分隨機 */
-export function greedyMove(game: DuelGame, random: () => number = Math.random): Pos | null {
-  const side = game.turn;
-  let best: Pos[] = [], bestScore = -Infinity;
-  for (const cell of game.legalCells()) {
+/**
+ * 貪心:分別試「每堆 9 / 3 / 1 個泉」三種拆法,每一堆都放到預演格數差最大的格,
+ * 最後取三種拆法裡結果最好的。返回本回合要放的格(同一格重複 = 疊放)。
+ */
+export function greedyTurn(game: DuelGame, random: () => number = Math.random): Pos[] {
+  let bestPlan: Pos[] = [], bestScore = -Infinity;
+  for (const stack of [9, 3, 1]) {
     const g = game.clone();
-    g.springs.push({ ...cell, side });
-    const score = g.preview(side);
-    if (score > bestScore) { bestScore = score; best = [cell]; }
-    else if (score === bestScore) best.push(cell);
+    const plan: Pos[] = [];
+    while (g.left > 0) {
+      const size = Math.min(stack, g.left);
+      let cells: Pos[] = [], top = -Infinity;
+      for (const cell of g.legalCells()) {
+        if (g.value(cell.r, cell.c, g.turn) + size > CELL_MAX) continue;
+        const t = g.clone();
+        for (let i = 0; i < size; i++) t.add(cell.r, cell.c);
+        const score = t.preview();
+        if (score > top) { top = score; cells = [cell]; }
+        else if (score === top) cells.push(cell);
+      }
+      if (!cells.length) break;
+      const pick = cells[Math.floor(random() * cells.length)];
+      for (let i = 0; i < size; i++) { g.add(pick.r, pick.c); plan.push(pick); }
+    }
+    const score = g.preview();
+    if (score > bestScore) { bestScore = score; bestPlan = plan; }
   }
-  return best.length ? best[Math.floor(random() * best.length)] : null;
+  return bestPlan;
 }

@@ -10,8 +10,8 @@
 </head>
 <body class="duel">
 <header>
-  <h1>扩散对战 <span>草案 2</span> <a class="nav" href="index.html">沙盘 →</a></h1>
-  <p>每回合把固定数量的泉放到任意几个格子。两方的水各自扩散，同一格里谁的水达到对方的若干倍，谁才能占下或夺走这一格。</p>
+  <h1>扩散对战 <span>草案 3</span> <a class="nav" href="index.html">沙盘 →</a></h1>
+  <p>每回合有固定数量的泉，可以全压在一格，也可以分到多格。确认后你的水扩散一次；同一格里谁的水达到对方的若干倍，谁才能占下或夺走它。</p>
 </header>
 
 <main>
@@ -32,10 +32,10 @@
       </select>
     </label>
     <label class="field">每回合泉数
-      <select id="perTurn">
-        <option value="1">1</option>
-        <option value="2" selected>2</option>
-        <option value="3">3</option>
+      <select id="budget">
+        <option value="6">6</option>
+        <option value="9" selected>9</option>
+        <option value="12">12</option>
       </select>
     </label>
     <label class="field">夺格倍数
@@ -58,8 +58,16 @@
         <option value="bot" selected>电脑（贪心）</option>
       </select>
     </label>
-    <div class="row"><button id="new" class="primary">开始新对局</button></div>
-    <label class="check"><input id="skip" type="checkbox"> 跳过扩散动画</label>
+    <div class="row"><button id="new">开始新对局</button></div>
+
+    <h2>扩散速度</h2>
+    <div class="seg" id="speed">
+      <button data-ms="900">慢</button>
+      <button data-ms="450" class="on">中</button>
+      <button data-ms="150">快</button>
+      <button data-ms="0">瞬时</button>
+    </div>
+    <p class="hint">扩散时可随时暂停，再用「单步」一步一步看。</p>
   </section>
 
   <section class="stage">
@@ -73,20 +81,29 @@
     </div>
     <div class="board" id="board"></div>
     <div class="status" id="status" aria-live="polite"></div>
+    <div class="actions" id="act-place">
+      <button id="undo" title="Z 或 退格；也可右键点格子收回">撤回一个</button>
+      <button id="confirm" class="primary" title="回车">确认放置</button>
+    </div>
+    <div class="actions" id="act-flow" hidden>
+      <button id="pause" title="空格">暂停</button>
+      <button id="one" title="→">单步</button>
+      <button id="skip">跳到结束</button>
+    </div>
     <div class="legend">
-      <span><i class="k own"></i>已占领：大字是占领方的水量，角上小字是对方渗入的水量</span>
-      <span><i class="k con"></i>争夺中：两方水量并列，谁也没到倍数</span>
+      <span><i class="k own"></i>已占领：大字是占领方的水量，右下角小字是对方渗入的水量</span>
+      <span><i class="k con"></i>无主：水刚流到、一轮结束才结算；或两方水量并列，谁也没到倍数</span>
     </div>
   </section>
 
   <section class="panel" aria-label="规则">
     <h2>规则</h2>
     <ol class="rules">
-      <li>每回合放固定数量的泉，位置自选：不能放在墙、已有的泉、或对方占领的格上。</li>
-      <li>双方都放完后，所有泉把己方的水重置为 9，两方的水各自按扩散规则流到静止，互不阻挡。</li>
-      <li>静止后逐格结算：一方水量 &gt; 0 且不少于对方的<b id="r-ratio">2</b> 倍，这格归它。</li>
-      <li>双方都不到倍数时维持原主；原本无主的就继续无主（争夺中）。</li>
-      <li>一轮结束时占领过半者立刻获胜；否则打满回合后格数多者胜。</li>
+      <li>每回合得到固定数量的泉。点一下格子放 1 个泉（该格己方水量 +1，单格最多 9），可叠放也可分散。不能放在墙或对方占领的格上。</li>
+      <li>确认后，你的水按扩散规则流到静止：值最大的可扩散格按 上→右→下→左 找第一个差 &gt; 1 的邻格，搬运 ⌊差/2⌋。两方的水互不阻挡。</li>
+      <li>一轮（双方各一回合）结束时逐格结算：一方水量 &gt; 0 且不少于对方的<b id="r-ratio">2</b> 倍，这格归它。</li>
+      <li>双方都不到倍数时维持原主；原本无主的继续无主（争夺中）。</li>
+      <li>结算后占领过半者立刻获胜；否则打满回合后格数多者胜。</li>
     </ol>
     <h2>本局</h2>
     <ol class="log" id="log"></ol>

@@ -15,11 +15,22 @@ select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .duel[data-turn="1"] .cell.legal:hover { outline-color: var(--side-a); }
 .duel[data-turn="-1"] .cell.legal:hover { outline-color: var(--side-b); }
 
-/* 泉:所属方颜色的内描边;角标在染色格上随文字色,在未染色格上用所属方颜色 */
-.duel .cell.source.sa { box-shadow: inset 0 0 0 2px var(--side-a); }
-.duel .cell.source.sb { box-shadow: inset 0 0 0 2px var(--side-b); }
-.duel .cell.source.sa[data-v="0"]::before, .duel .cell.source.sa.contested::before { color: var(--side-a); }
-.duel .cell.source.sb[data-v="0"]::before, .duel .cell.source.sb.contested::before { color: var(--side-b); }
+/* 本回合刚放、尚未扩散的泉:所属方颜色的内描边 + 左上角 +n */
+.duel .cell.pending.pa { box-shadow: inset 0 0 0 2px var(--side-a); }
+.duel .cell.pending.pb { box-shadow: inset 0 0 0 2px var(--side-b); }
+.duel .cell .plus {
+  position: absolute; left: 2px; top: 1px;
+  font: 700 10px var(--mono); line-height: 1;
+  padding: 1px 3px; border-radius: 2px; background: #12121a;
+}
+.pending.pa .plus { color: var(--side-a); }
+.pending.pb .plus { color: var(--side-b); }
+
+.actions { display: flex; gap: 8px; width: min(100%, 540px); }
+.actions[hidden] { display: none; }
+.actions button { flex: 1; padding: 9px 8px; }
+button:disabled { opacity: .45; cursor: default; }
+button:disabled:hover { border-color: var(--line); }
 
 /* 已占领格里对方渗入的水量 */
 .duel .cell .foe {
