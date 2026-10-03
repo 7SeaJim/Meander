@@ -19,16 +19,19 @@
     <h2>新对局</h2>
     <label class="field">棋盘
       <select id="size">
-        <option value="7">7 × 7</option>
-        <option value="9" selected>9 × 9</option>
+        <option value="9">9 × 9</option>
         <option value="11">11 × 11</option>
+        <option value="13" selected>13 × 13</option>
+        <option value="15">15 × 15</option>
+        <option value="19">19 × 19</option>
       </select>
     </label>
     <label class="field">回合数
       <select id="rounds">
-        <option value="6">6</option>
-        <option value="8" selected>8</option>
-        <option value="12">12</option>
+        <option value="8">8</option>
+        <option value="12" selected>12</option>
+        <option value="16">16</option>
+        <option value="24">24</option>
       </select>
     </label>
     <label class="field">每回合泉数
@@ -36,12 +39,14 @@
         <option value="6">6</option>
         <option value="9" selected>9</option>
         <option value="12">12</option>
+        <option value="18">18</option>
       </select>
     </label>
     <label class="field">夺格倍数
       <select id="ratio">
-        <option value="1.5">1.5 倍</option>
-        <option value="2" selected>2 倍</option>
+        <option value="1">1 倍（水多即可）</option>
+        <option value="1.5" selected>1.5 倍</option>
+        <option value="2">2 倍</option>
         <option value="3">3 倍</option>
       </select>
     </label>
@@ -101,7 +106,7 @@
     <ol class="rules">
       <li>每回合得到固定数量的泉。点一下格子放 1 个泉（该格己方水量 +1，单格最多 9），可叠放也可分散。不能放在墙或对方占领的格上。</li>
       <li>确认后，你的水按扩散规则流到静止：值最大的可扩散格按 上→右→下→左 找第一个差 &gt; 1 的邻格，搬运 ⌊差/2⌋。两方的水互不阻挡。</li>
-      <li>一轮（双方各一回合）结束时逐格结算：一方水量 &gt; 0 且不少于对方的<b id="r-ratio">2</b> 倍，这格归它。</li>
+      <li>一轮（双方各一回合）结束时逐格结算：一方水量 &gt; 0 且不少于对方的<b id="r-ratio">1.5</b> 倍，这格归它。</li>
       <li>双方都不到倍数时维持原主；原本无主的继续无主（争夺中）。</li>
       <li>结算后占领过半者立刻获胜；否则打满回合后格数多者胜。</li>
     </ol>

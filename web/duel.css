@@ -8,8 +8,8 @@ select {
 }
 select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
-.duel .board { width: min(100%, calc(var(--cols) * 60px)); }
-.duel .cell { cursor: not-allowed; font-size: clamp(11px, 2.6vw, 20px); }
+.duel .board { width: min(100%, calc(var(--cols) * 46px)); gap: 2px; font-size: clamp(10px, calc(46vw / var(--cols)), 18px); }
+.duel .cell { cursor: not-allowed; font-size: inherit; }
 .duel .cell.legal { cursor: pointer; }
 .duel .cell.legal:hover { outline: 2px solid var(--text); outline-offset: -2px; z-index: 2; }
 .duel[data-turn="1"] .cell.legal:hover { outline-color: var(--side-a); }

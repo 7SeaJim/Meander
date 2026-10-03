@@ -65,9 +65,9 @@ export class DuelGame {
   constructor(rows: number, cols: number, opts: DuelOptions = {}) {
     this.rows = rows;
     this.cols = cols;
-    this.maxRounds = opts.maxRounds ?? 8;
+    this.maxRounds = opts.maxRounds ?? 12;
     this.budget = opts.budget ?? 9;
-    this.ratio = opts.ratio ?? 2;
+    this.ratio = opts.ratio ?? 1.5;
     this.sticky = opts.sticky ?? true;
     this.resolve = opts.resolve ?? "round";
     this.strategy = opts.strategy ?? "fifo";
