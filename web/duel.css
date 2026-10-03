@@ -1,0 +1,38 @@
+/* 对战页:接在 style.css 之后 */
+:root { --side-a: #ff9f43; --side-b: #3ec6e0; }
+
+.field { display: flex; justify-content: space-between; align-items: center; gap: 8px; color: var(--dim); font-size: 13px; margin-bottom: 6px; white-space: nowrap; }
+select {
+  font: inherit; font-size: 13px; color: var(--text); min-width: 0; flex: 0 1 auto;
+  background: #101016; border: 1px solid var(--line); border-radius: 4px; padding: 5px 6px;
+}
+select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.duel .board { width: min(100%, calc(var(--cols) * 60px)); }
+.duel .cell { cursor: not-allowed; font-size: clamp(11px, 2.6vw, 20px); }
+.duel .cell.legal { cursor: pointer; }
+.duel .cell.legal:hover { outline: 2px solid var(--text); outline-offset: -2px; z-index: 2; }
+.duel[data-turn="1"] .cell.legal:hover { outline-color: var(--side-a); }
+.duel[data-turn="-1"] .cell.legal:hover { outline-color: var(--side-b); }
+.duel .cell.source.sa { box-shadow: inset 0 0 0 2px var(--side-a); }
+.duel .cell.source.sb { box-shadow: inset 0 0 0 2px var(--side-b); }
+/* 泉所在格已被染色时,角标随文字色;尚未注入(格值为 0)时用所属方的颜色 */
+.duel .cell.source.sa[data-v="0"]::before { color: var(--side-a); }
+.duel .cell.source.sb[data-v="0"]::before { color: var(--side-b); }
+
+.score { display: flex; width: min(100%, 540px); height: 10px; border-radius: 5px; background: var(--v0); position: relative; }
+.score i { display: block; height: 100%; transition: width .2s; }
+.score .sa { background: var(--side-a); border-radius: 5px 0 0 5px; }
+.score .sb { background: var(--side-b); border-radius: 0 5px 5px 0; }
+.score::after { content: ""; position: absolute; left: 50%; top: -3px; bottom: -3px; width: 2px; background: var(--text); opacity: .7; }
+.tally { display: flex; justify-content: space-between; align-items: baseline; width: min(100%, 540px); color: var(--dim); font-size: 12px; margin-top: -6px; }
+.tally b { font: 600 18px var(--mono); }
+.ta, .ta b, .la, .status b.ta { color: var(--side-a); }
+.tb, .tb b, .lb, .status b.tb { color: var(--side-b); }
+
+.rules { margin: 0; padding-left: 18px; color: var(--dim); font-size: 12.5px; }
+.rules li { margin-bottom: 4px; }
+.duel .log { max-height: 220px; scrollbar-width: thin; scrollbar-color: #3a3a4a transparent; }
+.duel .log li:first-child { font-weight: 600; }
+.duel .log li.la { color: var(--side-a); }
+.duel .log li.lb { color: var(--side-b); }

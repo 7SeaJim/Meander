@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>扩散对战</title>
+<style>
+/*__CSS__*/
+</style>
+</head>
+<body class="duel">
+<header>
+  <h1>扩散对战 <span>草案</span> <a class="nav" href="index.html">沙盘 →</a></h1>
+  <p>轮流放泉。两方的水相遇即抵消，静止后双方之间总隔着一格无主地带。一轮结束时占领过半者胜，否则打满回合比格数。</p>
+</header>
+
+<main>
+  <section class="panel" aria-label="设置">
+    <h2>新对局</h2>
+    <label class="field">棋盘
+      <select id="size">
+        <option value="7">7 × 7</option>
+        <option value="9" selected>9 × 9</option>
+        <option value="11">11 × 11</option>
+      </select>
+    </label>
+    <label class="field">回合数
+      <select id="rounds">
+        <option value="6">6</option>
+        <option value="10" selected>10</option>
+        <option value="15">15</option>
+      </select>
+    </label>
+    <label class="field">墙
+      <select id="walls">
+        <option value="none">无</option>
+        <option value="pillars">五柱</option>
+        <option value="river">中河（两处渡口）</option>
+      </select>
+    </label>
+    <label class="field">青方
+      <select id="rival">
+        <option value="human">同屏玩家</option>
+        <option value="bot" selected>电脑（贪心一步）</option>
+      </select>
+    </label>
+    <label class="field">注入时机
+      <select id="inject">
+        <option value="round" selected>双方落子后一起</option>
+        <option value="all">每手全部注入</option>
+        <option value="mine">每手只注入落子方</option>
+      </select>
+    </label>
+    <div class="row"><button id="new" class="primary">开始新对局</button></div>
+    <label class="check"><input id="skip" type="checkbox"> 跳过扩散动画</label>
+    <p class="hint">注入时机影响先后手平衡：随机对局里「一起」约五五开，「每手全部」先手约九成胜，「只注入落子方」后手大优。</p>
+  </section>
+
+  <section class="stage">
+    <div class="score" id="score" aria-hidden="true">
+      <i class="sa" id="bar-a"></i><i class="sn" id="bar-n"></i><i class="sb" id="bar-b"></i>
+    </div>
+    <div class="tally">
+      <span class="ta">橙 <b id="n-a">0</b></span>
+      <span id="n-half"></span>
+      <span class="tb"><b id="n-b">0</b> 青</span>
+    </div>
+    <div class="board" id="board"></div>
+    <div class="status" id="status" aria-live="polite"></div>
+  </section>
+
+  <section class="panel" aria-label="规则">
+    <h2>规则</h2>
+    <ol class="rules">
+      <li>橙方的水为正、青方为负，每格 −9…9。</li>
+      <li>每手在一个格子放泉：不能放在墙、已有的泉、或对方占领的格上。</li>
+      <li>注入时所有泉重置为 9，然后扩散到静止：值最大的可扩散格按 上→右→下→左 找第一个差 &gt; 1 的邻格，搬运 ⌊差/2⌋。</li>
+      <li>异色相邻时差必然 &gt; 1，搬运即互相抵消。</li>
+      <li>一轮（双方各一手）结束时占领过半者立刻获胜；否则打满回合后格数多者胜。</li>
+    </ol>
+    <h2>本局</h2>
+    <ol class="log" id="log"></ol>
+  </section>
+</main>
+
+<script type="module">
+/*__ENGINE__*/
+{
+/*__APP__*/
+}
+</script>
+</body>
+</html>
