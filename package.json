@@ -5,6 +5,7 @@
   "scripts": {
     "build": "node build.mjs",
     "open": "node build.mjs && xdg-open dist/index.html",
-    "demo": "node diffusion.ts"
+    "demo": "node diffusion.ts",
+    "verify": "node verify.mjs"
   }
 }

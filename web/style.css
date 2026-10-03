@@ -135,7 +135,7 @@ input[type=number] {
   font-size: 9px; color: inherit; opacity: .9;
 }
 
-/* 最近一步:主格实线、受格虚线,箭头指向搬运方向 */
+/* 最近一步:主格实线、客格虚线,箭头指向搬运方向 */
 .cell.src { outline: 2px solid #fff; outline-offset: -1px; z-index: 2; }
 .cell.dst { outline: 2px dashed #fff; outline-offset: -1px; z-index: 1; }
 .cell .arrow {
