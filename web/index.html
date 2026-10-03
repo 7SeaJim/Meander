@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>扩散规则 Ver.1.1</title>
+<style>
+/*__CSS__*/
+</style>
+</head>
+<body>
+<header>
+  <h1>扩散规则 <span>Ver.1.1</span></h1>
+  <p>每格 0–9。值最大的可扩散格按 上→右→下→左 找第一个差 &gt; 1 的邻居，搬运 ⌊差/2⌋，直到没有格子可扩散。</p>
+</header>
+
+<main>
+  <section class="panel tools" aria-label="画笔">
+    <h2>画笔</h2>
+    <div class="digits" id="digits"></div>
+    <div class="row">
+      <button class="tool" data-tool="wall" title="快捷键 W">✕ 墙</button>
+      <button class="tool" data-tool="source" title="快捷键 S">◆ 源</button>
+    </div>
+    <p class="hint">数字/墙可拖动连画。「源」以当前数字标记注入点，再点一次取消。</p>
+
+    <h2>棋盘</h2>
+    <div class="row size">
+      <label>行 <input id="rows" type="number" min="2" max="16"></label>
+      <label>列 <input id="cols" type="number" min="2" max="16"></label>
+    </div>
+    <div class="row">
+      <button id="clear">清空数值</button>
+      <button id="reset">示例</button>
+    </div>
+  </section>
+
+  <section class="stage">
+    <div class="board" id="board"></div>
+    <div class="status" id="status" aria-live="polite"></div>
+  </section>
+
+  <section class="panel run" aria-label="演化">
+    <h2>演化</h2>
+    <div class="row">
+      <button id="step" title="空格">单步</button>
+      <button id="play" class="primary" title="回车">播放</button>
+    </div>
+    <div class="row">
+      <button id="settle" title="直接算到演化结束">沉降到底</button>
+    </div>
+    <label class="check"><input id="auto" type="checkbox" checked> 放置后自动演化</label>
+    <label class="range">速度 <input id="speed" type="range" min="1" max="10" value="6"></label>
+
+    <h2>平手策略</h2>
+    <div class="seg" id="strategy">
+      <button data-s="scan" title="行优先，先扫到者">scan</button>
+      <button data-s="fifo" title="最早变动的格优先">fifo</button>
+      <button data-s="lifo" title="最近变动的格优先">lifo</button>
+    </div>
+
+    <h2>源与稳态</h2>
+    <div class="row">
+      <button id="inject" title="把各源格设回源值">注入一次</button>
+      <button id="steady" title="反复注入直到不动点">求稳态</button>
+    </div>
+    <label class="check"><input id="cone" type="checkbox"> 对比锥面预测（源强度 − 测地距离）</label>
+
+    <h2>计数</h2>
+    <dl class="stats">
+      <div><dt>步数</dt><dd id="s-steps">0</dd></div>
+      <div><dt>搬运量</dt><dd id="s-moved">0</dd></div>
+      <div><dt>盘面总和</dt><dd id="s-sum">0</dd></div>
+    </dl>
+    <ol class="log" id="log"></ol>
+  </section>
+</main>
+
+<script type="module">
+/*__ENGINE__*/
+{
+/*__APP__*/
+}
+</script>
+</body>
+</html>
