@@ -8,8 +8,9 @@
  * 可以全壓在一格,也可以每格放 1,或任意拆分。不能放在牆或對方佔領的格上。
  * 確認後只有落子方那一層擴散到靜止(泉是一次性倒下的水,之後不再補)。
  *
- * 歸屬在盤面靜止時結算:比較每一格 3×3 範圍內(含本格)雙方的水量總和,
- * 多的一方佔有;相等則僵持,維持原主(原本無主的仍無主)。
+ * 歸屬在盤面靜止時結算,只有有水的格才有主(沒有任何一方水的格永遠無主,誰都能放):
+ * 比較該格 3×3 範圍內(含本格)雙方的水量總和,多的一方佔有(對方多則被吃);
+ * 相等則僵持,維持原主(原本無主的仍無主)。
  * resolve = "round" 時一輪(雙方各一回合)結束才結算;"turn" 時每回合結束都結算。
  * alternate 時每輪交換先手(橙青、青橙、橙青……),否則每輪都是橙先。
  *
@@ -187,15 +188,18 @@ export class DuelGame {
     return b.get(r, c) + b.neighborhoodSum(r, c);
   }
 
-  /** 靜止時結算歸屬:3×3 內水多的一方佔有,相等僵持 */
+  /** 靜止時結算歸屬:只有有水的格才有主;3×3 內水多的一方佔有,相等僵持 */
   resolveOwners(): void {
     for (let r = 0; r < this.rows; r++)
       for (let c = 0; c < this.cols; c++) {
         if (this.isWall(r, c)) continue;
         const i = r * this.cols + c;
-        const a = this.blockSum(r, c, 1), b = this.blockSum(r, c, -1);
         const cur = this.owners[i];
-        const next: Owner = a > b ? 1 : b > a ? -1 : cur;
+        let next: Owner = 0;
+        if (this.orange.get(r, c) > 0 || this.cyan.get(r, c) > 0) {
+          const a = this.blockSum(r, c, 1), b = this.blockSum(r, c, -1);
+          next = a > b ? 1 : b > a ? -1 : cur;
+        }
         if (cur !== 0 && next === -cur) this.captures++;
         this.owners[i] = next;
       }
