@@ -23,7 +23,7 @@ let mode = "game"; // game 对局 | tutorial 教学
 let phase = "place";
 let paused = false;
 let timer = null;
-let last = null; // 最近一步 DuelStep
+let last = null; // 最近一帧里黑白各自走的一步(DuelStep[]),两层同时流动
 let flowSteps = 0;
 let stepMs = 450;
 let simOn = false;
@@ -226,8 +226,8 @@ function botIfNeeded() {
 /* ---------------- 流动 ---------------- */
 
 function flowStep() {
-  const s = game.step();
-  if (!s) return finishRound(), false;
+  const s = game.stepBoth();
+  if (!s.length) return finishRound(), false;
   last = s;
   flowSteps++;
   return true;
@@ -425,11 +425,13 @@ function render() {
       if (owner === me && before !== me) d.classList.add("gain");
       else if (before === me && owner !== me) d.classList.add("loss");
     }
-    if (last && last.src.r === r && last.src.c === c) {
-      d.classList.add("src");
-      for (const [dir, n] of stepArrows(last)) d.append(el("span", `arrow d${dir}`, `${ARROWS[dir]}${n}`));
+    for (const s of last ?? []) {
+      if (s.src.r === r && s.src.c === c) {
+        d.classList.add("src");
+        for (const [dir, n] of stepArrows(s)) d.append(el("span", `arrow d${dir}`, `${ARROWS[dir]}${n}`));
+      }
+      if (isReceiver(s, r, c)) d.classList.add("dst");
     }
-    if (last && isReceiver(last, r, c)) d.classList.add("dst");
   }
 
   // 比分
@@ -451,9 +453,9 @@ function render() {
   } else if (phase === "review") {
     html = "";
   } else if (phase === "flow") {
-    html = last
-      ? `${tag(last.side)}的水在 (${last.src.r},${last.src.c}) 分出 <b>${last.moved}</b>：${stepArrows(last).map(([dir, n]) => ARROWS[dir] + n).join(" ")}${paused ? "（已暂停）" : ""}`
-      : "双方落子揭晓，水开始流动。";
+    html = last?.length
+      ? `两方的水同时流动。${last.map((s) => `${tag(s.side)}在 (${s.src.r},${s.src.c}) 分出 <b>${s.moved}</b>：${stepArrows(s).map(([dir, n]) => ARROWS[dir] + n).join(" ")}`).join("；")}${paused ? "（已暂停）" : ""}`
+      : "双方落子揭晓，两方的水同时开始流动。";
   } else if (phase === "handover") {
     html = `轮到${tag(game.turn)}落子。`;
   } else if (botPlays()) {

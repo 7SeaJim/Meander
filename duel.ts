@@ -247,6 +247,19 @@ export class DuelGame {
     return { ...res, side };
   }
 
+  /**
+   * 兩層同時各走一步(某層已靜止就只走另一層),供動畫並排顯示,不暗示誰先誰後。
+   * 兩層互不影響,所以和 step()、settle() 的最終結果完全相同。都靜止時返回空陣列。
+   */
+  stepBoth(): DuelStep[] {
+    const out: DuelStep[] = [];
+    for (const side of [1, -1] as const) {
+      const res = this.layer(side).step(this.strategy);
+      if (res) out.push({ ...res, side });
+    }
+    return out;
+  }
+
   settle(): number {
     return this.orange.settle(this.strategy).length + this.cyan.settle(this.strategy).length;
   }
