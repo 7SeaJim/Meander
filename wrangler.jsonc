@@ -1,0 +1,7 @@
+// Cloudflare Workers 静态网站配置:构建(npm run build)后把 dist/ 当静态资源发布。
+// name 须与 Cloudflare 控制台里的项目名一致;构建环境需设 NODE_VERSION=24(构建脚本要 Node ≥ 22.13)。
+{
+  "name": "meander",
+  "compatibility_date": "2025-09-01",
+  "assets": { "directory": "./dist" }
+}

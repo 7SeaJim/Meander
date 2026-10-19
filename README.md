@@ -24,6 +24,10 @@ npm run sim     # 对战规则的随机/贪心对局:不变量与先后手胜率
 （平台发布时自己包上）。更新时让 Claude 用同一个链接重新发布：主页面 `dist/artifact/index.html`，
 附带文件 `sandbox.html` ← `dist/sandbox.html`。
 
+Cloudflare Workers：仓库根目录的 `wrangler.jsonc` 把构建出的 `dist/` 当静态网站发布。控制台连接
+GitHub 仓库 `7SeaJim/Meander`，项目名 `meander`（须与配置里的 `name` 一致），构建命令 `npm run build`，
+部署命令 `npx wrangler deploy`，构建变量 `NODE_VERSION=24`。之后每次推送到 `main` 自动重新部署。
+
 ## 两套扩散规则（`diffusion.ts`，`rule` 参数）
 
 共同：每格 0–9，每次由值最大的可扩散格扩散，同值平手按调度策略；没有可扩散格时结束。
