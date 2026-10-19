@@ -5,10 +5,11 @@ const $ = (id) => document.getElementById(id);
 const NAME = { 1: "橙方", [-1]: "青方" };
 const RGB = { 1: [255, 159, 67], [-1]: [62, 198, 224], 0: [22, 22, 29] };
 const ARROWS = ["↑", "→", "↓", "←"]; // 与引擎 上→右→下→左 的顺序一致
-const BOT_SHOW_MS = 700; // 电脑放好后停一下,让人看清它放在哪
+const BOT_THINK_MS = 400; // 电脑落子前停一下,让状态栏的「思考中」看得见
 
 let game = null;
-let phase = "place"; // place 放泉 | flow 扩散中 | over 终局
+// place 落子 | handover 同屏交接(盖住盘面)| flow 揭晓后扩散 | over 终局
+let phase = "place";
 let paused = false;
 let timer = null;
 let last = null; // 最近一步 DuelStep
@@ -24,6 +25,10 @@ function wallPreset(n, kind) {
   return out;
 }
 
+const hotSeat = () => $("rival").value === "human";
+const botPlays = () => !hotSeat() && game.turn === -1 && phase === "place";
+const humanPlacing = () => phase === "place" && !botPlays();
+
 function newGame() {
   clearTimeout(timer);
   const n = Number($("size").value);
@@ -32,12 +37,12 @@ function newGame() {
     budget: Number($("budget").value),
     walls: wallPreset(n, $("walls").value),
   });
-  phase = "place";
   paused = false;
   last = null;
   $("log").textContent = "";
   const el = $("board");
   el.style.setProperty("--cols", n);
+  el.parentElement.style.setProperty("--cols", n);
   el.textContent = "";
   for (let r = 0; r < n; r++)
     for (let c = 0; c < n; c++) {
@@ -47,12 +52,15 @@ function newGame() {
       d.dataset.c = c;
       el.append(d);
     }
+  startPlacing();
+}
+
+/** 进入当前一方的落子;同屏双人时先盖住盘面,让另一方回避 */
+function startPlacing() {
+  phase = hotSeat() ? "handover" : "place";
   render();
   botIfNeeded();
 }
-
-const botPlays = () => $("rival").value === "bot" && game.turn === -1 && phase === "place";
-const humanPlacing = () => phase === "place" && !botPlays();
 
 function log(text, side) {
   const li = document.createElement("li");
@@ -61,17 +69,21 @@ function log(text, side) {
   $("log").prepend(li);
 }
 
-/* ---------------- 放泉 ---------------- */
+/* ---------------- 落子 ---------------- */
 
-function describePlacement() {
+function describe(list) {
   const piles = new Map();
-  for (const p of game.placed) piles.set(`${p.r},${p.c}`, (piles.get(`${p.r},${p.c}`) ?? 0) + 1);
+  for (const p of list) piles.set(`${p.r},${p.c}`, (piles.get(`${p.r},${p.c}`) ?? 0) + 1);
   return [...piles].map(([k, n]) => `(${k})×${n}`).join(" ") || "未放";
 }
 
 function confirmPlacement() {
   if (phase !== "place") return;
-  log(`第 ${game.round} 轮 ${NAME[game.turn]} ${describePlacement()}`, game.turn);
+  game.commit();
+  if (game.phase === "place") return startPlacing(); // 橙方放完,轮到青方
+  // 双方都放完:揭晓
+  log(`第 ${game.round} 轮 橙方 ${describe(game.revealed[1])}`, 1);
+  log(`第 ${game.round} 轮 青方 ${describe(game.revealed[-1])}`, -1);
   phase = "flow";
   paused = false;
   last = null;
@@ -82,19 +94,17 @@ function confirmPlacement() {
 
 function botIfNeeded() {
   if (!botPlays()) return;
-  render();
   timer = setTimeout(() => {
     for (const p of greedyTurn(game)) game.add(p.r, p.c);
-    render();
-    timer = setTimeout(confirmPlacement, stepMs ? BOT_SHOW_MS : 0);
-  }, 50);
+    confirmPlacement();
+  }, BOT_THINK_MS);
 }
 
 /* ---------------- 扩散 ---------------- */
 
 function flowStep() {
   const s = game.step();
-  if (!s) return finishTurn(), false;
+  if (!s) return finishRound(), false;
   last = s;
   flowSteps++;
   return true;
@@ -113,24 +123,20 @@ function flowTick() {
   }
 }
 
-function finishTurn() {
+function finishRound() {
   clearTimeout(timer);
-  const closing = game.turn === -game.firstOf(game.round); // 本轮后手下完,要结算
   const before = game.captures, was = game.count();
-  game.endTurn();
+  game.endRound();
   last = null;
   const now = game.count();
-  if (closing || game.resolve === "turn") {
-    const gain = (x) => (x >= 0 ? `+${x}` : `${x}`);
-    log(`结算：橙 ${now.a}（${gain(now.a - was.a)}） 青 ${now.b}（${gain(now.b - was.b)}）`
-      + (game.captures > before ? `，易主 ${game.captures - before} 格` : ""));
-  }
+  const gain = (x) => (x >= 0 ? `+${x}` : `${x}`);
+  log(`结算：橙 ${now.a}（${gain(now.a - was.a)}） 青 ${now.b}（${gain(now.b - was.b)}）`
+    + (game.captures > before ? `，易主 ${game.captures - before} 格` : ""));
   if (game.winner !== null) {
     phase = "over";
     log(game.winner === 0 ? `平局 ${now.a} : ${now.b}` : `${NAME[game.winner]}胜 ${now.a} : ${now.b}`, game.winner);
-  } else phase = "place";
-  render();
-  botIfNeeded();
+    render();
+  } else startPlacing();
 }
 
 /* ---------------- 输入 ---------------- */
@@ -152,6 +158,7 @@ $("board").addEventListener("contextmenu", (ev) => {
 });
 
 const undo = () => { if (humanPlacing() && game.take()) render(); };
+const uncover = () => { if (phase === "handover") { phase = "place"; render(); } };
 const togglePause = () => {
   if (phase !== "flow") return;
   paused = !paused;
@@ -173,6 +180,7 @@ const skipFlow = () => {
 
 $("undo").addEventListener("click", undo);
 $("confirm").addEventListener("click", () => { if (humanPlacing()) confirmPlacement(); });
+$("cover").addEventListener("click", uncover);
 $("pause").addEventListener("click", togglePause);
 $("one").addEventListener("click", oneStep);
 $("skip").addEventListener("click", skipFlow);
@@ -186,7 +194,10 @@ for (const b of $("speed").children)
 
 window.addEventListener("keydown", (ev) => {
   if (ev.target.matches?.("select, input") || ev.ctrlKey || ev.metaKey || ev.altKey) return;
-  if (ev.key === "Enter" && !ev.target.matches?.("button")) { if (humanPlacing()) confirmPlacement(); }
+  if (ev.key === "Enter" && !ev.target.matches?.("button")) {
+    if (phase === "handover") uncover();
+    else if (humanPlacing()) confirmPlacement();
+  }
   else if (ev.key === "z" || ev.key === "Z" || ev.key === "Backspace") undo();
   else if (ev.key === " ") { ev.preventDefault(); togglePause(); }
   else if (ev.key === "ArrowRight") oneStep();
@@ -248,14 +259,15 @@ function render() {
       d.textContent = 0;
     }
 
-    const pending = phase === "place" ? game.placedAt(r, c) : 0;
+    // 只画当前落子方自己的待放泉;对方的待放泉看不到
+    const pending = placing ? game.placedAt(r, c) : 0;
     if (pending) {
       d.classList.add("pending", game.turn === 1 ? "pa" : "pb");
       d.append(span("plus", `+${pending}`));
     }
     if (placing && game.canAdd(r, c)) d.classList.add("legal");
     if (last && last.src.r === r && last.src.c === c) {
-      d.classList.add("src");
+      d.classList.add("src", last.side === 1 ? "fa-src" : "fb-src");
       for (const [dir, n] of stepArrows(last)) d.append(span(`arrow d${dir}`, `${ARROWS[dir]}${n}`));
     }
     if (last && isReceiver(last, r, c)) d.classList.add("dst");
@@ -269,22 +281,34 @@ function render() {
   $("n-b").textContent = b;
   $("n-half").textContent = `过半需 ${Math.floor(open / 2) + 1} 格`;
 
-  const st = $("status");
   const cls = (s) => (s === 1 ? "ta" : "tb");
-  const who = `<b class="${cls(game.turn)}">${NAME[game.turn]}</b>`;
-  const head = `第 ${game.round} / ${game.maxRounds} 轮 · ${who}`;
+  const tag = (s) => `<b class="${cls(s)}">${NAME[s]}</b>`;
+  const head = `第 ${game.round} / ${game.maxRounds} 轮`;
+  const st = $("status");
   if (phase === "over") {
     st.innerHTML = game.winner === 0
       ? `<b>平局</b>，${a} : ${b}。`
-      : `<b class="${cls(game.winner)}">${NAME[game.winner]}获胜</b>，${a} : ${b}。`;
+      : `${tag(game.winner)}获胜，${a} : ${b}。`;
   } else if (phase === "flow") {
     st.innerHTML = last
-      ? `${head} 扩散第 <b>${flowSteps}</b> 步：(${last.src.r},${last.src.c}) 给出 <b>${last.moved}</b>（${stepArrows(last).map(([d, n]) => ARROWS[d] + n).join(" ")}）${paused ? " · 已暂停" : ""}`
-      : `${head} 扩散中…`;
+      ? `${head} · 揭晓 · 扩散第 <b>${flowSteps}</b> 步：${tag(last.side)} (${last.src.r},${last.src.c}) 给出 <b>${last.moved}</b>（${stepArrows(last).map(([d, n]) => ARROWS[d] + n).join(" ")}）${paused ? " · 已暂停" : ""}`
+      : `${head} · 揭晓，扩散中…`;
+  } else if (phase === "handover") {
+    st.innerHTML = `${head} · 轮到${tag(game.turn)}落子`;
   } else if (botPlays()) {
-    st.innerHTML = `${head} ${game.placed.length ? "已放好" : "思考中…"}`;
+    st.innerHTML = `${head} · ${tag(1)}已放好 · ${tag(-1)}思考中…`;
   } else {
-    st.innerHTML = `${head} 放泉，还剩 <b>${game.left}</b> / ${game.budget} 个`;
+    const waiting = game.turn === -1 ? `${tag(1)}已放好（看不到）· ` : "";
+    st.innerHTML = `${head} · ${waiting}${tag(game.turn)}放泉，还剩 <b>${game.left}</b> / ${game.budget} 个`;
+  }
+
+  const cover = $("cover");
+  cover.hidden = phase !== "handover";
+  if (phase === "handover") {
+    const other = NAME[-game.turn];
+    cover.querySelector("b").textContent = `轮到${NAME[game.turn]}落子`;
+    cover.querySelector("span").textContent = `${other}请回避。点击或按回车开始`;
+    cover.dataset.side = game.turn;
   }
 
   $("act-place").hidden = phase === "flow";

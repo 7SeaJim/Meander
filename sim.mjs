@@ -1,16 +1,16 @@
-// 对战规则的随机/贪心对局检验:先后手胜率、拆法(集中 vs 分散)相克、易主次数。
+// 对战规则的随机/贪心对局检验:橙青胜率(同时落子,应无先后手之分)、拆法相克、易主次数。
 // 运行: node sim.mjs [quick]
 import { DuelGame, greedyTurn } from "./duel.ts";
 
 const QUICK = process.argv[2] === "quick";
 const rnd = (n) => Math.floor(Math.random() * n);
 
-// 把本回合的泉按每堆 size 个放到随机合法格
+// 把本轮的泉按每堆 size 个放到随机合法格
 const stacker = (size) => (g) => {
   const t = g.clone(), plan = [];
   while (t.left > 0) {
     const n = Math.min(size, t.left);
-    const cells = t.legalCells().filter((p) => t.value(p.r, p.c, t.turn) + n <= 9);
+    const cells = t.legalCells().filter((p) => t.value(p.r, p.c, t.turn) + t.placedAt(p.r, p.c) + n <= 9);
     if (!cells.length) break;
     const p = cells[rnd(cells.length)];
     for (let i = 0; i < n; i++) { t.add(p.r, p.c); plan.push(p); }
@@ -21,15 +21,10 @@ const BOTS = { "集中9": stacker(9), "三堆3": stacker(3), "九个1": stacker(
 
 function match(n, opts, botA, botB) {
   const g = new DuelGame(n, n, opts);
-  let steps = 0, turns = 0;
-  while (g.winner === null) {
-    const plan = (g.turn === 1 ? botA : botB)(g);
-    for (const p of plan) g.add(p.r, p.c);
-    steps += g.settle(); turns++;
-    g.endTurn();
-  }
+  let steps = 0;
+  while (g.winner === null) steps += g.playTurn((g.turn === 1 ? botA : botB)(g));
   const { a, b, open } = g.count();
-  return { winner: g.winner, a, b, open, captures: g.captures, rounds: g.round, steps: steps / turns };
+  return { winner: g.winner, a, b, open, captures: g.captures, rounds: g.round, steps: steps / g.round };
 }
 
 function series(nameA, nameB, games, n, opts) {
@@ -41,7 +36,7 @@ function series(nameA, nameB, games, n, opts) {
     captures += m.captures; rounds += m.rounds; steps += m.steps;
   }
   const avg = (x, k = 1) => (x / games).toFixed(k);
-  console.log(`  ${(nameA + "(先) vs " + nameB).padEnd(16)} 先:后:平 ${w}:${l}:${d} | ${avg(rounds)} 轮, 已占领 ${(100 * owned / games).toFixed(0)}%, 分差 ${avg(margin)} 格, 易主 ${avg(captures)} 次/局, 每回合扩散 ${avg(steps)} 步`);
+  console.log(`  ${(nameA + "(橙) vs " + nameB).padEnd(16)} 橙:青:平 ${w}:${l}:${d} | ${avg(rounds)} 轮, 已占领 ${(100 * owned / games).toFixed(0)}%, 分差 ${avg(margin)} 格, 易主 ${avg(captures)} 次/局, 每轮扩散 ${avg(steps)} 步`);
 }
 
 function suite(label, n, opts) {
@@ -57,7 +52,5 @@ function suite(label, n, opts) {
   series("三堆3", "贪心", few, n, opts);
 }
 
-const base = { maxRounds: 8, budget: 9, resolve: "round", alternate: true };
-suite("9×9 默认: Ver.2 邻域规则, 3×3 夺格, 一轮结算, 每轮交换先手", 9, base);
-suite("9×9 不交换先手", 9, { ...base, alternate: false });
-suite("13×13, 12 轮", 13, { ...base, maxRounds: 12 });
+suite("9×9, 8 轮, 每轮 9 泉, 同时落子", 9, { maxRounds: 8, budget: 9 });
+suite("13×13, 12 轮", 13, { maxRounds: 12, budget: 9 });

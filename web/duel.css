@@ -72,3 +72,17 @@ button:disabled:hover { border-color: var(--line); }
 .duel .log li:first-child { font-weight: 600; }
 .duel .log li.la { color: var(--side-a); }
 .duel .log li.lb { color: var(--side-b); }
+
+/* 同屏双人交接:盖住盘面,另一方回避 */
+.board-wrap { position: relative; width: min(100%, calc(var(--cols, 13) * 46px)); display: flex; justify-content: center; }
+.duel .board-wrap .board { width: 100%; }
+.cover {
+  position: absolute; inset: 0; z-index: 5;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+  background: rgba(14, 14, 19, .96); border: 1px solid var(--line); border-radius: 6px;
+  color: var(--dim); font-size: 14px; cursor: pointer;
+}
+.cover[hidden] { display: none; }
+.cover b { font-size: 22px; }
+.cover[data-side="1"] b { color: var(--side-a); }
+.cover[data-side="-1"] b { color: var(--side-b); }
