@@ -43,7 +43,7 @@ const LESSONS = [
     ready: (g) => g.placedAt(3, 3) === 8,
     after: () => ({
       ok: true,
-      text: "一格的水比周围 8 格加起来还多，就会按上、右、下、左轮流分出去，直到不再多。8 变成了中间 4、四周各 1。有水的格都归你，现在你占 5 格，颜色深的就是你的地盘。",
+      text: "一格的水比周围 8 格加起来还多，就会按上、右、下、左轮流分出去，直到不再多。8 变成了中间 4、四周各 1。有水的格都归你，现在你占 5 格：黑底白字的格就是你的地盘。",
     }),
   },
   {
@@ -52,11 +52,11 @@ const LESSONS = [
     focus: [1, 5],
     white: [],
     setup: (g) => { g.setWater(-1, 1, 5, 1); g.resolveOwners(); },
-    ask: "右上那颗白子是白方的水。一格归谁，看它周围 3×3 里谁的水多。在它旁边放泉，让那片区域里你的水比白方多，就能吃掉它。拿不准就先按「演算」看看。",
+    ask: "右上那格白底的是白方的水。一格归谁，看它周围 3×3 里谁的水多。在它旁边放泉，让那片区域里你的水比白方多，就能吃掉它。拿不准就先按「演算」看看。",
     ready: (g) => g.placed.length > 0,
     after: (g) => g.value(1, 5, -1) === 0
-      ? { ok: true, text: "吃掉了。被吃掉的水会消失，那一格变回空地。只放 1 个泉只能和白子打平，打平时格子还归原来的主人。" }
-      : { ok: false, text: "这次没吃掉：那片 3×3 里你的水还不比白方多。按「重试」再来，试着在白子旁边的一格放 2 个以上。" },
+      ? { ok: true, text: "吃掉了。被吃掉的水会消失，那一格变回空地。只放 1 个泉只能和白方打平，打平时格子还归原来的主人。" }
+      : { ok: false, text: "这次没吃掉：那片 3×3 里你的水还不比白方多。按「重试」再来，试着在白格旁边的一格放 2 个以上。" },
   },
   {
     title: "同时落子",
@@ -353,11 +353,6 @@ function el(tag, cls, text) {
   return e;
 }
 
-function stone(side, v) {
-  const s = el("span", `stone ${side === 1 ? "sb" : "sw"}`, v);
-  s.style.setProperty("--v", v);
-  return s;
-}
 
 /** 一步的各方向分出量:[方向, 数量] */
 function stepArrows(s) {
@@ -383,11 +378,17 @@ function render() {
     if (game.isWall(r, c)) { d.classList.add("wall"); continue; }
 
     const a = view.value(r, c, 1), b = view.value(r, c, -1), owner = view.owner(r, c);
-    if (owner) d.classList.add(owner === 1 ? "tb" : "tw");
-    if (a && b) { d.classList.add("both"); d.append(stone(1, a), stone(-1, b)); }
-    else if (a) d.append(stone(1, a));
-    else if (b) d.append(stone(-1, b));
-    else d.classList.add("empty");
+    if (owner) {
+      // 占领格:整格染成占领方的颜色,写占领方的水量;对方渗入的水写在角上
+      const mine = owner === 1 ? a : b, theirs = owner === 1 ? b : a;
+      d.classList.add(owner === 1 ? "tb" : "tw");
+      d.append(String(mine));
+      if (theirs) d.append(el("span", "foe", theirs));
+    } else if (a && b) {
+      d.classList.add("both");
+      d.append(el("span", "nb", a), el("span", "nw", b));
+    } else if (a) d.append(el("span", "nb", a));
+    else if (b) d.append(el("span", "nw", b));
 
     const pending = placing ? game.placedAt(r, c) : 0;
     if (pending) {

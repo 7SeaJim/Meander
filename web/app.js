@@ -300,7 +300,7 @@ for (let d = 0; d <= 9; d++) {
   x.textContent = d;
   x.dataset.d = d;
   x.style.background = `var(--v${d})`;
-  x.style.color = d >= 7 ? "#1d0d05" : d === 0 ? "#8a8797" : "#fff";
+  x.style.color = d >= 5 ? "#fff" : "#000";
   x.addEventListener("click", () => pickDigit(d));
   $("digits").append(x);
 }
