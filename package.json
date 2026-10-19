@@ -5,7 +5,7 @@
   "scripts": {
     "build": "node build.mjs",
     "open": "node build.mjs && xdg-open dist/index.html",
-    "duel": "node build.mjs && xdg-open dist/duel.html",
+    "sandbox": "node build.mjs && xdg-open dist/sandbox.html",
     "demo": "node diffusion.ts",
     "verify": "node verify.mjs",
     "sim": "node sim.mjs"

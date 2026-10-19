@@ -4,8 +4,8 @@
 规则只写在这两个文件里，`web/` 是它们的网页界面。
 
 ```sh
-npm run open    # 构建并打开沙盘 dist/index.html
-npm run duel    # 构建并打开对战 dist/duel.html
+npm run open    # 构建并打开对弈页 dist/index.html
+npm run sandbox # 构建并打开沙盘 dist/sandbox.html
 npm run build   # 只构建
 npm run demo    # 命令行跑 diffusion.ts 自带的 demo
 npm run verify  # 随机检验规则书「待验证」清单(稳态 vs 锥面预测 / 策略无关性)
@@ -14,6 +14,15 @@ npm run sim     # 对战规则的随机/贪心对局:不变量与先后手胜率
 
 需要 Node ≥ 22.13（用自带的类型擦除，无任何依赖）。`dist/` 下的两个页面都是自包含的单文件，
 可直接双击打开或拷走。改了引擎或 `web/` 后重新 `npm run build`。
+
+## 外部访问
+
+已发布为 claude.ai 的私有网页（Artifact）：https://claude.ai/artifact/REcQuJLh3eMJ5M4JS8jpoM
+默认只有所有者能打开，要给别人看在页面的「分享」菜单里设置。
+
+`npm run build` 会另外生成 `dist/artifact/index.html`：内容与对弈页相同，只是去掉了文档外壳
+（平台发布时自己包上）。更新时让 Claude 用同一个链接重新发布：主页面 `dist/artifact/index.html`，
+附带文件 `sandbox.html` ← `dist/sandbox.html`。
 
 ## 两套扩散规则（`diffusion.ts`，`rule` 参数）
 
@@ -28,7 +37,7 @@ npm run sim     # 对战规则的随机/贪心对局:不变量与先后手胜率
 3000 个随机盘面（3×3–12×12，含墙）上 Ver.2 全部停机且守恒，单盘最多 18 步。同一格连倒三次 9，
 Ver.1.1 摊成最高 2 的缓坡，Ver.2 能停在中心 8、上方 4。
 
-## 沙盘（index.html）
+## 沙盘（sandbox.html）
 
 黑白配色：0–9 用从浅灰到纯黑的灰阶表示水量，与对弈页共用纸、墨、字体。
 
@@ -42,7 +51,7 @@ Ver.1.1 摊成最高 2 的缓坡，Ver.2 能停在中心 8、上方 4。
 - **源与稳态**：「注入一次」把各源设回源值；「求稳态」调用 `steadyState()`。
   勾选「对比锥面预测」后，每格右下角显示 `conePrediction()` 的值，不符的格标红。
 
-## 对战草案 5（duel.html）
+## 对战草案 5（index.html，对弈页）
 
 规则书里没有这部分，规则以 `duel.ts` 顶部的注释为准。
 
