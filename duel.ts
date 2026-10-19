@@ -12,6 +12,10 @@
  * 歸屬只有有水的格才有(沒有任何一方水的格永遠無主,誰都能放):
  * 比較該格 3×3 範圍內(含本格)雙方的水量總和,多的一方佔有(對方多則被吃);
  * 相等則僵持,維持原主(原本無主的仍無主)。
+ * 被吃時,輸的一方留在該格的水(capture):
+ *  - "keep"    不動,只換主人(於是會出現「佔了一格、格裡卻沒有自己的水」)
+ *  - "remove"  清掉;若贏的一方在該格也沒有水,這格變回無主空地
+ *  - "convert" 換邊,併入贏的一方(單格上限 9)
  *
  * 結算後佔領過半者勝;否則打滿 maxRounds 後比佔領格數。
  */
@@ -23,6 +27,7 @@ export type Side = 1 | -1;
 export type Owner = Side | 0;
 /** place:輪到 turn 一方落子;flow:已揭曉,兩層水擴散中 */
 export type Phase = "place" | "flow";
+export type CaptureMode = "keep" | "remove" | "convert";
 
 export interface DuelStep extends StepResult { side: Side }
 
@@ -30,6 +35,7 @@ export interface DuelOptions {
   maxRounds?: number;
   budget?: number;
   rule?: Rule;
+  capture?: CaptureMode;
   walls?: Pos[];
   strategy?: Strategy;
 }
@@ -42,6 +48,7 @@ export class DuelGame {
   readonly maxRounds: number;
   readonly budget: number;
   readonly rule: Rule;
+  readonly capture: CaptureMode;
   readonly strategy: Strategy;
 
   private orange: DiffusionBoard;
@@ -69,6 +76,7 @@ export class DuelGame {
     this.maxRounds = opts.maxRounds ?? 12;
     this.budget = opts.budget ?? 9;
     this.rule = opts.rule ?? "block";
+    this.capture = opts.capture ?? "keep";
     this.strategy = opts.strategy ?? "fifo";
     this.orange = new DiffusionBoard(rows, cols, undefined, this.rule);
     this.cyan = new DiffusionBoard(rows, cols, undefined, this.rule);
@@ -82,7 +90,8 @@ export class DuelGame {
 
   clone(): DuelGame {
     const g = new DuelGame(this.rows, this.cols, {
-      maxRounds: this.maxRounds, budget: this.budget, rule: this.rule, strategy: this.strategy,
+      maxRounds: this.maxRounds, budget: this.budget, rule: this.rule,
+      capture: this.capture, strategy: this.strategy,
     });
     g.orange = this.orange.clone();
     g.cyan = this.cyan.clone();
@@ -213,6 +222,7 @@ export class DuelGame {
 
   /** 靜止時結算歸屬:只有有水的格才有主;3×3 內水多的一方佔有,相等僵持 */
   resolveOwners(): void {
+    // 先按結算前的水量逐格定歸屬(同時判定),再處理被吃的水
     for (let r = 0; r < this.rows; r++)
       for (let c = 0; c < this.cols; c++) {
         if (this.isWall(r, c)) continue;
@@ -225,6 +235,18 @@ export class DuelGame {
         }
         if (cur !== 0 && next === -cur) this.captures++;
         this.owners[i] = next;
+      }
+    if (this.capture === "keep") return;
+    for (let r = 0; r < this.rows; r++)
+      for (let c = 0; c < this.cols; c++) {
+        const i = r * this.cols + c, owner = this.owners[i];
+        if (owner === 0 || this.isWall(r, c)) continue;
+        const win = this.layer(owner), lose = this.layer(owner === 1 ? -1 : 1);
+        const eaten = lose.get(r, c);
+        if (eaten === 0) continue;
+        lose.set(r, c, 0);
+        if (this.capture === "convert") win.set(r, c, Math.min(CELL_MAX, win.get(r, c) + eaten));
+        else if (win.get(r, c) === 0) this.owners[i] = 0;
       }
   }
 

@@ -6,6 +6,11 @@ const NAME = { 1: "橙方", [-1]: "青方" };
 const RGB = { 1: [255, 159, 67], [-1]: [62, 198, 224], 0: [22, 22, 29] };
 const ARROWS = ["↑", "→", "↓", "←"]; // 与引擎 上→右→下→左 的顺序一致
 const BOT_THINK_MS = 400; // 电脑落子前停一下,让状态栏的「思考中」看得见
+const CAPTURE_TEXT = {
+  keep: "被吃的格里输方的水不动，只换主人，所以会出现「占了一格、格里却没有自己的水」（显示为染色的 0）。",
+  remove: "被吃的格里输方的水被清掉；若赢方在这格也没有水，它变回无主空地。",
+  convert: "被吃的格里输方的水换边，并入赢方（单格最多 9）。",
+};
 
 let game = null;
 // place 落子 | handover 同屏交接(盖住盘面)| flow 揭晓后扩散 | over 终局
@@ -37,7 +42,9 @@ function newGame() {
     maxRounds: Number($("rounds").value),
     budget: Number($("budget").value),
     walls: wallPreset(n, $("walls").value),
+    capture: $("capture").value,
   });
+  $("r-capture").textContent = CAPTURE_TEXT[game.capture];
   paused = false;
   last = null;
   $("log").textContent = "";
@@ -345,7 +352,7 @@ function render() {
 }
 
 $("new").addEventListener("click", newGame);
-for (const id of ["size", "rounds", "budget", "walls", "rival"])
+for (const id of ["size", "rounds", "budget", "walls", "capture", "rival"])
   $(id).addEventListener("change", newGame);
 
 newGame();
