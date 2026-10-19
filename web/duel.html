@@ -3,121 +3,133 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>扩散对战</title>
+<title>扩散对弈</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;600;700&family=Noto+Serif+SC:wght@900&display=swap" rel="stylesheet">
 <style>
 /*__CSS__*/
 </style>
 </head>
 <body class="duel">
-<header>
-  <h1>扩散对战 <span>草案 5</span> <a class="nav" href="index.html">沙盘 →</a></h1>
-  <p>每轮双方同时落子：各自把固定数量的泉放进盘面，彼此看不见，都确认后一起揭晓、一起扩散。有水的格归 3×3 范围内水多的一方，相等则僵持。</p>
+<div class="page">
+
+<header class="top">
+  <h1>扩散对弈</h1>
+  <nav class="menu">
+    <button id="tutor" class="link">教学</button>
+    <button id="toggle-settings" class="link" aria-expanded="false" aria-controls="settings">设置</button>
+    <button id="toggle-rules" class="link" aria-expanded="false" aria-controls="rules">规则</button>
+    <a class="link" href="index.html">沙盘</a>
+  </nav>
 </header>
 
-<main>
-  <section class="panel" aria-label="设置">
-    <h2>新对局</h2>
-    <label class="field">棋盘
-      <select id="size">
-        <option value="9">9 × 9</option>
-        <option value="11">11 × 11</option>
-        <option value="13" selected>13 × 13</option>
-        <option value="15">15 × 15</option>
-        <option value="19">19 × 19</option>
-      </select>
-    </label>
-    <label class="field">回合数
-      <select id="rounds">
-        <option value="8">8</option>
-        <option value="12" selected>12</option>
-        <option value="16">16</option>
-        <option value="24">24</option>
-      </select>
-    </label>
-    <label class="field">每回合泉数
-      <select id="budget">
-        <option value="6">6</option>
-        <option value="9" selected>9</option>
-        <option value="12">12</option>
-        <option value="18">18</option>
-      </select>
-    </label>
-    <label class="field">墙
-      <select id="walls">
-        <option value="none">无</option>
-        <option value="pillars">五柱</option>
-        <option value="river">中河（两处渡口）</option>
-      </select>
-    </label>
-    <label class="field">被吃的水
-      <select id="capture">
-        <option value="keep" selected>不动</option>
-        <option value="remove">消失</option>
-        <option value="convert">换边</option>
-      </select>
-    </label>
-    <label class="field">青方
-      <select id="rival">
-        <option value="human">同屏玩家</option>
-        <option value="bot" selected>电脑（贪心）</option>
-      </select>
-    </label>
-    <div class="row"><button id="new">开始新对局</button></div>
+<section id="settings" class="drawer" hidden>
+  <label class="field">棋盘
+    <select id="size">
+      <option value="9">9 × 9</option>
+      <option value="11">11 × 11</option>
+      <option value="13" selected>13 × 13</option>
+      <option value="15">15 × 15</option>
+      <option value="19">19 × 19</option>
+    </select>
+  </label>
+  <label class="field">回合
+    <select id="rounds">
+      <option value="8">8</option>
+      <option value="12" selected>12</option>
+      <option value="16">16</option>
+      <option value="24">24</option>
+    </select>
+  </label>
+  <label class="field">每轮泉数
+    <select id="budget">
+      <option value="6">6</option>
+      <option value="9" selected>9</option>
+      <option value="12">12</option>
+      <option value="18">18</option>
+    </select>
+  </label>
+  <label class="field">被吃的水
+    <select id="capture">
+      <option value="remove" selected>消失</option>
+      <option value="keep">不动</option>
+      <option value="convert">换边</option>
+    </select>
+  </label>
+  <label class="field">墙
+    <select id="walls">
+      <option value="none">无</option>
+      <option value="pillars">五柱</option>
+      <option value="river">中河</option>
+    </select>
+  </label>
+  <label class="field">对手
+    <select id="rival">
+      <option value="bot" selected>电脑</option>
+      <option value="human">同屏两人</option>
+    </select>
+  </label>
+  <button id="new" class="solid">开始新对局</button>
+</section>
 
-    <h2>扩散速度</h2>
-    <div class="seg" id="speed">
-      <button data-ms="900">慢</button>
-      <button data-ms="450" class="on">中</button>
-      <button data-ms="150">快</button>
-      <button data-ms="0">瞬时</button>
-    </div>
-    <p class="hint">扩散时可随时暂停，再用「单步」一步一步看。</p>
-  </section>
+<section id="rules" class="drawer prose" hidden>
+  <ol>
+    <li>你执黑，对手执白。每轮双方同时落子：各有固定数量的泉，点一格放 1 个，这格你的水 +1，一格最多 9。可以叠在一格，也可以分散。不能放在墙上或对方的地盘里。</li>
+    <li>双方都确认后一起揭晓，各自的水开始流动。一格的水比周围 8 格加起来还多，就按上、右、下、左轮流分出去，直到不再多。两方的水互不阻挡。</li>
+    <li>水停下后结算。只有有水的格才有主人，空格谁都能放。有水的格看它周围 3×3 里谁的水多，多的一方得到这格，打平则维持原主。<span id="r-capture"></span></li>
+    <li>结算后占到过半格子的一方立刻获胜，否则打满回合，格子多者胜。</li>
+    <li>落子时按「演算」能预览你这一手的结果。对方这轮放了什么你看不到，演算按对方不落子计算。</li>
+  </ol>
+</section>
 
-  <section class="stage">
-    <div class="score" id="score" aria-hidden="true">
-      <i class="sa" id="bar-a"></i><i class="sn" id="bar-n"></i><i class="sb" id="bar-b"></i>
-    </div>
-    <div class="tally">
-      <span class="ta">橙 <b id="n-a">0</b></span>
-      <span id="n-half"></span>
-      <span class="tb"><b id="n-b">0</b> 青</span>
-    </div>
-    <div class="board-wrap">
-      <div class="board" id="board"></div>
-      <button class="cover" id="cover" hidden><b></b><span></span></button>
-    </div>
-    <div class="status" id="status" aria-live="polite"></div>
-    <div class="actions" id="act-place">
-      <button id="undo" title="Z 或 退格；也可右键点格子收回">撤回一个</button>
-      <button id="sim" title="P：预览本方的泉扩散并结算后的样子">演算</button>
-      <button id="confirm" class="primary" title="回车">确认放置</button>
-    </div>
-    <div class="actions" id="act-flow" hidden>
-      <button id="pause" title="空格">暂停</button>
-      <button id="one" title="→">单步</button>
-      <button id="skip">跳到结束</button>
-    </div>
-    <div class="legend">
-      <span><i class="k own"></i>已占领：大字是占领方在本格的水量，右下角小字是对方在本格的水量（归属看的是 3×3 总和）</span>
-      <span><i class="k con"></i>无主：水刚流到、一轮结束才结算；或 3×3 内双方水量相等。没有水的格（显示 0）也无主</span>
-    </div>
-  </section>
+<section class="scoreboard" aria-label="比分">
+  <p class="side sb"><i class="dot"></i>黑方 <b id="n-b">0</b></p>
+  <p class="round" id="round"></p>
+  <p class="side sw"><b id="n-w">0</b> 白方<i class="dot"></i></p>
+  <div class="bar" id="bar"><i id="bar-b"></i><i id="bar-n"></i><i id="bar-w"></i></div>
+</section>
 
-  <section class="panel" aria-label="规则">
-    <h2>规则</h2>
-    <ol class="rules">
-      <li>每轮双方同时落子：各得固定数量的泉，点一下格子放 1 个（该格己方水量 +1，单格最多 9），可叠放也可分散。不能放在墙或对方占领的格上。放的泉彼此看不见。</li>
-      <li>双方都确认后一起揭晓，两方的水各自扩散到静止、互不阻挡：一格的水多于周围 8 格之和时，逐个按 上→右→下→左 轮流给四邻（只给比它至少低 2 的），直到不多于周围之和。周围无水时，8 变成中心 4、四邻各 1；7 变成中心 3、四邻各 1。</li>
-      <li>静止后结算。只有有水的格才有主，没有水的空格永远无主、谁都能放。有水的格比较 3×3 范围内（含本格）双方的水量总和：对方多就被吃，归对方；相等则僵持，维持原主。<span id="r-capture"></span></li>
-      <li>同屏双人时，每次落子前盘面会被盖住，另一方请回避。</li>
-      <li>落子时可开「演算」（P）：盘面改显示本方的泉扩散并结算后的样子，放子、收回会实时更新。对方本轮放了什么看不到，演算按对方不落子计算。</li>
-      <li>结算后占领过半者立刻获胜；否则打满回合后格数多者胜。</li>
-    </ol>
-    <h2>本局</h2>
-    <ol class="log" id="log"></ol>
-  </section>
-</main>
+<section id="lesson" class="lesson" hidden aria-live="polite">
+  <p class="lesson-step" id="lesson-step"></p>
+  <p class="lesson-text" id="lesson-text"></p>
+  <div class="lesson-actions">
+    <button id="lesson-next" class="solid">下一步</button>
+    <button id="lesson-retry">重试</button>
+    <button id="lesson-quit" class="link">退出教学</button>
+  </div>
+</section>
+
+<div class="board-wrap">
+  <div class="board" id="board"></div>
+  <button class="cover" id="cover" hidden><b></b><span></span></button>
+</div>
+
+<p class="status" id="status" aria-live="polite"></p>
+
+<div class="actions" id="act-place">
+  <button id="undo" title="Z 或退格；也可右键点格子收回">撤回</button>
+  <button id="sim" title="P">演算</button>
+  <button id="confirm" class="solid" title="回车">确认放置</button>
+</div>
+<div class="actions" id="act-flow" hidden>
+  <button id="pause" title="空格">暂停</button>
+  <button id="one" title="→">单步</button>
+  <button id="skip">跳到结束</button>
+  <div class="speed" id="speed" role="group" aria-label="流动速度">
+    <button data-ms="900">慢</button>
+    <button data-ms="450" class="on">中</button>
+    <button data-ms="150">快</button>
+    <button data-ms="0">瞬时</button>
+  </div>
+</div>
+
+<details class="record">
+  <summary>对局记录</summary>
+  <ol class="log" id="log"></ol>
+</details>
+
+</div>
 
 <script type="module">
 /*__ENGINE__*/

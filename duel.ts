@@ -14,7 +14,7 @@
  * 相等則僵持,維持原主(原本無主的仍無主)。
  * 被吃時,輸的一方留在該格的水(capture):
  *  - "keep"    不動,只換主人(於是會出現「佔了一格、格裡卻沒有自己的水」)
- *  - "remove"  清掉;若贏的一方在該格也沒有水,這格變回無主空地
+ *  - "remove"  清掉;若贏的一方在該格也沒有水,這格變回無主空地(預設)
  *  - "convert" 換邊,併入贏的一方(單格上限 9)
  *
  * 結算後佔領過半者勝;否則打滿 maxRounds 後比佔領格數。
@@ -46,7 +46,8 @@ export class DuelGame {
   readonly rows: number;
   readonly cols: number;
   readonly maxRounds: number;
-  readonly budget: number;
+  /** 每輪泉數(教學關可逐關調整) */
+  budget: number;
   readonly rule: Rule;
   readonly capture: CaptureMode;
   readonly strategy: Strategy;
@@ -76,7 +77,7 @@ export class DuelGame {
     this.maxRounds = opts.maxRounds ?? 12;
     this.budget = opts.budget ?? 9;
     this.rule = opts.rule ?? "block";
-    this.capture = opts.capture ?? "keep";
+    this.capture = opts.capture ?? "remove";
     this.strategy = opts.strategy ?? "fifo";
     this.orange = new DiffusionBoard(rows, cols, undefined, this.rule);
     this.cyan = new DiffusionBoard(rows, cols, undefined, this.rule);
@@ -212,6 +213,11 @@ export class DuelGame {
 
   settle(): number {
     return this.orange.settle(this.strategy).length + this.cyan.settle(this.strategy).length;
+  }
+
+  /** 直接設定 side 一方在該格的水量(教學關佈局用) */
+  setWater(side: Side, r: number, c: number, v: number): void {
+    this.layer(side).set(r, c, v);
   }
 
   /** side 一方在該格 3×3 範圍內(含本格)的水量總和 */

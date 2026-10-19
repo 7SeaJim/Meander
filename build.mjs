@@ -12,7 +12,7 @@ const read = (p) => readFileSync(join(root, p), "utf8");
 
 const PAGES = {
   "index.html": { engines: ["diffusion.ts"], app: "web/app.js", css: ["web/style.css"] },
-  "duel.html": { engines: ["diffusion.ts", "duel.ts"], app: "web/duel.js", css: ["web/style.css", "web/duel.css"] },
+  "duel.html": { engines: ["diffusion.ts", "duel.ts"], app: "web/duel.js", css: ["web/duel.css"] },
 };
 
 // 引擎之间的相对 import 在拼成一个模块后不再需要(名字已在同一作用域)
