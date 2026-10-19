@@ -86,3 +86,12 @@ button:disabled:hover { border-color: var(--line); }
 .cover b { font-size: 22px; }
 .cover[data-side="1"] b { color: var(--side-a); }
 .cover[data-side="-1"] b { color: var(--side-b); }
+
+/* 演算:盘面显示预演结果 */
+.duel .board.simulating { outline: 2px dashed var(--accent); outline-offset: 5px; border-radius: 3px; }
+.duel .cell.gain::after, .duel .cell.loss::after {
+  content: ""; position: absolute; inset: 3px; border-radius: 2px; pointer-events: none;
+  border: 2px dashed #fff;
+}
+.duel .cell.loss::after { border-color: var(--bad); }
+.status .simline { color: var(--accent); font-size: 12.5px; }

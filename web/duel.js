@@ -15,6 +15,7 @@ let timer = null;
 let last = null; // 最近一步 DuelStep
 let flowSteps = 0;
 let stepMs = 450;
+let simOn = false; // 演算:落子时显示本方待放泉扩散并结算后的盘面
 
 function wallPreset(n, kind) {
   const m = (n - 1) / 2, out = [];
@@ -79,6 +80,7 @@ function describe(list) {
 
 function confirmPlacement() {
   if (phase !== "place") return;
+  simOn = false;
   game.commit();
   if (game.phase === "place") return startPlacing(); // 橙方放完,轮到青方
   // 双方都放完:揭晓
@@ -158,6 +160,7 @@ $("board").addEventListener("contextmenu", (ev) => {
 });
 
 const undo = () => { if (humanPlacing() && game.take()) render(); };
+const toggleSim = () => { if (humanPlacing()) { simOn = !simOn; render(); } };
 const uncover = () => { if (phase === "handover") { phase = "place"; render(); } };
 const togglePause = () => {
   if (phase !== "flow") return;
@@ -179,6 +182,7 @@ const skipFlow = () => {
 };
 
 $("undo").addEventListener("click", undo);
+$("sim").addEventListener("click", toggleSim);
 $("confirm").addEventListener("click", () => { if (humanPlacing()) confirmPlacement(); });
 $("cover").addEventListener("click", uncover);
 $("pause").addEventListener("click", togglePause);
@@ -199,6 +203,7 @@ window.addEventListener("keydown", (ev) => {
     else if (humanPlacing()) confirmPlacement();
   }
   else if (ev.key === "z" || ev.key === "Z" || ev.key === "Backspace") undo();
+  else if (ev.key === "p" || ev.key === "P") toggleSim();
   else if (ev.key === " ") { ev.preventDefault(); togglePause(); }
   else if (ev.key === "ArrowRight") oneStep();
 });
@@ -230,6 +235,10 @@ const isReceiver = (s, r, c) =>
 
 function render() {
   const placing = humanPlacing();
+  // 演算时盘面显示 view(本方待放泉倒入、沉降、结算后的局面),其余仍以 game 为准
+  const sim = placing && simOn && game.placed.length ? game.previewGame() : null;
+  const view = sim ? sim.game : game;
+  $("board").classList.toggle("simulating", !!sim);
 
   for (const d of $("board").children) {
     const r = Number(d.dataset.r), c = Number(d.dataset.c);
@@ -243,7 +252,7 @@ function render() {
       d.textContent = "✕";
       continue;
     }
-    const a = game.value(r, c, 1), b = game.value(r, c, -1), owner = game.owner(r, c);
+    const a = view.value(r, c, 1), b = view.value(r, c, -1), owner = view.owner(r, c);
     if (owner) {
       const mine = owner === 1 ? a : b, theirs = owner === 1 ? b : a;
       d.style.background = shade(owner, mine);
@@ -266,6 +275,11 @@ function render() {
       d.append(span("plus", `+${pending}`));
     }
     if (placing && game.canAdd(r, c)) d.classList.add("legal");
+    if (sim) {
+      const before = game.owner(r, c), me = game.turn;
+      if (owner === me && before !== me) d.classList.add("gain");
+      else if (before === me && owner !== me) d.classList.add("loss");
+    }
     if (last && last.src.r === r && last.src.c === c) {
       d.classList.add("src", last.side === 1 ? "fa-src" : "fb-src");
       for (const [dir, n] of stepArrows(last)) d.append(span(`arrow d${dir}`, `${ARROWS[dir]}${n}`));
@@ -273,7 +287,7 @@ function render() {
     if (last && isReceiver(last, r, c)) d.classList.add("dst");
   }
 
-  const { a, b, open } = game.count();
+  const { a, b, open } = view.count();
   $("bar-a").style.width = `${(100 * a) / open}%`;
   $("bar-b").style.width = `${(100 * b) / open}%`;
   $("bar-n").style.width = `${(100 * (open - a - b)) / open}%`;
@@ -300,6 +314,12 @@ function render() {
   } else {
     const waiting = game.turn === -1 ? `${tag(1)}已放好（看不到）· ` : "";
     st.innerHTML = `${head} · ${waiting}${tag(game.turn)}放泉，还剩 <b>${game.left}</b> / ${game.budget} 个`;
+    if (simOn) {
+      const now = game.count(), gain = (x) => (x >= 0 ? `+${x}` : `${x}`);
+      st.innerHTML += sim
+        ? `<br><span class="simline">演算（按对方本轮不落子）：橙 ${a}（${gain(a - now.a)}） 青 ${b}（${gain(b - now.b)}），扩散 ${sim.steps} 步</span>`
+        : `<br><span class="simline">演算已开：放泉后这里显示结果</span>`;
+    }
   }
 
   const cover = $("cover");
@@ -314,6 +334,9 @@ function render() {
   $("act-place").hidden = phase === "flow";
   $("act-flow").hidden = phase !== "flow";
   $("undo").disabled = !placing || game.placed.length === 0;
+  $("sim").disabled = !placing;
+  $("sim").classList.toggle("on", placing && simOn);
+  $("sim").textContent = placing && simOn ? "退出演算" : "演算";
   $("confirm").disabled = !placing;
   $("confirm").textContent = placing && game.left > 0 && game.placed.length
     ? `确认放置（${game.left} 个作废）` : "确认放置";

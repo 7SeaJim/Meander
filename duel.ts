@@ -257,13 +257,22 @@ export class DuelGame {
    * 看不到對方本輪的待放泉,所以電腦當後手也無法偷看。
    */
   preview(): number {
+    const { a, b } = this.previewGame().game.count();
+    return this.turn * (a - b);
+  }
+
+  /**
+   * 演算:返回「當前一方的待放泉倒入、己方那層沉降、結算」之後的局面(不改本局),
+   * 以及沉降的步數。對方本輪的待放泉不計入。
+   */
+  previewGame(): { game: DuelGame; steps: number } {
     const g = this.clone();
     const side = this.turn;
     g.pour(side);
-    g.layer(side).settle(g.strategy);
+    g.pending[side] = [];
+    const steps = g.layer(side).settle(g.strategy).length;
     g.resolveOwners();
-    const { a, b } = g.count();
-    return side * (a - b);
+    return { game: g, steps };
   }
 }
 
