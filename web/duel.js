@@ -146,18 +146,26 @@ function newGame() {
   tut = null;
   const n = Number($("size").value);
   game = new DuelGame(n, n, {
-    maxRounds: Number($("rounds").value),
+    maxRounds: Number($("rounds").value) || Infinity, // 0 = 不限
+    majority: $("goal").value === "majority",
     budget: Number($("budget").value),
     walls: wallPreset(n, $("walls").value),
     capture: $("capture").value,
   });
   $("r-capture").textContent = CAPTURE_TEXT[game.capture];
+  $("r-goal").textContent = goalText(game);
   paused = false;
   last = null;
   simOn = false;
   $("log").textContent = "";
   buildBoard(n);
   startPlacing();
+}
+
+function goalText(g) {
+  const cap = Number.isFinite(g.maxRounds) ? `打满 ${g.maxRounds} 轮，格子多者胜` : "";
+  if (g.majority) return `结算后占到过半格子的一方立刻获胜${cap ? `，否则${cap}` : "。不限回合，也可以随时按「结束并计分」"}。`;
+  return cap ? `不以过半定胜负，${cap}。` : "不限回合、不设目标，想停时按「结束并计分」，格子多者胜。";
 }
 
 const rival = () => (mode === "tutorial" ? "script" : $("rival").value);
@@ -193,6 +201,10 @@ function confirmPlacement() {
   if (game.phase === "place") return startPlacing(); // 黑方放完,轮到白方
   log(`第 ${game.round} 轮黑方：${describe(game.revealed[1])}`, 1);
   log(`第 ${game.round} 轮白方：${describe(game.revealed[-1])}`, -1);
+  for (const { r, c, a, b } of game.collisions)
+    log(a === b
+      ? `(${r},${c}) 双方各放 ${a} 个，相互抵消`
+      : `(${r},${c}) 黑 ${a} 个、白 ${b} 个，${a > b ? "黑" : "白"}方剩 ${Math.abs(a - b)} 个`);
   phase = "flow";
   paused = false;
   last = null;
@@ -322,7 +334,17 @@ $("pause").addEventListener("click", togglePause);
 $("one").addEventListener("click", oneStep);
 $("skip").addEventListener("click", skipFlow);
 $("new").addEventListener("click", () => { closeDrawers(); newGame(); });
-for (const id of ["size", "rounds", "budget", "walls", "capture", "rival"])
+$("finish").addEventListener("click", () => {
+  if (mode !== "game" || phase === "flow" || phase === "over") return;
+  clearTimeout(timer);
+  game.finish();
+  phase = "over";
+  simOn = false;
+  const { a, b } = game.count();
+  log(game.winner === 0 ? `手动结束，平局，${a} 比 ${b}` : `手动结束，${NAME[game.winner]}获胜，${a} 比 ${b}`, game.winner);
+  render();
+});
+for (const id of ["size", "rounds", "budget", "goal", "walls", "capture", "rival"])
   $(id).addEventListener("change", newGame);
 
 for (const b of $("speed").children)
@@ -418,7 +440,8 @@ function render() {
   $("bar-w").style.width = `${(100 * b) / open}%`;
   $("round").textContent = mode === "tutorial"
     ? `教学 ${tut.i + 1} / ${LESSONS.length}`
-    : `第 ${game.round} / ${game.maxRounds} 轮，过半要 ${Math.floor(open / 2) + 1} 格`;
+    : (Number.isFinite(game.maxRounds) ? `第 ${game.round} / ${game.maxRounds} 轮` : `第 ${game.round} 轮`)
+      + (game.majority ? `，过半要 ${Math.floor(open / 2) + 1} 格` : "");
 
   // 状态
   const tag = (s) => `<b>${NAME[s]}</b>`;
@@ -476,6 +499,9 @@ function render() {
   $("confirm").textContent = placing && game.left > 0 && game.placed.length
     ? `确认放置（${game.left} 个作废）` : "确认放置";
   $("pause").textContent = paused ? "继续" : "暂停";
+  // 不限回合时对局不会自己结束,给一个手动计分的出口
+  $("finish").hidden = mode !== "game" || Number.isFinite(game.maxRounds) || phase === "over";
+  $("finish").disabled = phase === "flow";
 }
 
 if (store.get("duel-tutorial-done")) newGame();

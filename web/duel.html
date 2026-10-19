@@ -40,6 +40,13 @@
       <option value="12" selected>12</option>
       <option value="16">16</option>
       <option value="24">24</option>
+      <option value="0">不限</option>
+    </select>
+  </label>
+  <label class="field">胜利条件
+    <select id="goal">
+      <option value="majority" selected>过半即胜</option>
+      <option value="none">不设目标</option>
     </select>
   </label>
   <label class="field">每轮泉数
@@ -76,9 +83,9 @@
 <section id="rules" class="drawer prose" hidden>
   <ol>
     <li>你执黑，对手执白。每轮双方同时落子：各有固定数量的泉，点一格放 1 个，这格你的水 +1，一格最多 9。可以叠在一格，也可以分散。不能放在墙上或对方的地盘里。</li>
-    <li>双方都确认后一起揭晓，各自的水开始流动。一格的水比周围 8 格加起来还多，就按上、右、下、左轮流分出去，直到不再多。两方的水互不阻挡。</li>
+    <li>双方都确认后一起揭晓。如果双方在同一格都放了泉，先互相抵消：数量相等就都作废，否则只有多的一方放进差值。然后各自的水开始流动。一格的水比周围 8 格加起来还多，就按上、右、下、左轮流分出去，直到不再多。两方的水互不阻挡。</li>
     <li>水停下后结算。只有有水的格才有主人，空格谁都能放。有水的格看它周围 3×3 里谁的水多，多的一方得到这格，打平则维持原主。<span id="r-capture"></span></li>
-    <li>结算后占到过半格子的一方立刻获胜，否则打满回合，格子多者胜。</li>
+    <li id="r-goal">结算后占到过半格子的一方立刻获胜，否则打满回合，格子多者胜。</li>
     <li>落子时按「演算」能预览你这一手的结果。对方这轮放了什么你看不到，演算按对方不落子计算。</li>
   </ol>
 </section>
@@ -111,6 +118,7 @@
   <button id="undo" title="Z 或退格；也可右键点格子收回">撤回</button>
   <button id="sim" title="P">演算</button>
   <button id="confirm" class="solid" title="回车">确认放置</button>
+  <button id="finish" class="link" hidden>结束并计分</button>
 </div>
 <div class="actions" id="act-flow" hidden>
   <button id="pause" title="空格">暂停</button>
