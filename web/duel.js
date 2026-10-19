@@ -30,14 +30,12 @@ function newGame() {
   game = new DuelGame(n, n, {
     maxRounds: Number($("rounds").value),
     budget: Number($("budget").value),
-    ratio: Number($("ratio").value),
     walls: wallPreset(n, $("walls").value),
   });
   phase = "place";
   paused = false;
   last = null;
   $("log").textContent = "";
-  $("r-ratio").textContent = ` ${game.ratio} `;
   const el = $("board");
   el.style.setProperty("--cols", n);
   el.textContent = "";
@@ -117,11 +115,12 @@ function flowTick() {
 
 function finishTurn() {
   clearTimeout(timer);
-  const side = game.turn, before = game.captures, was = game.count();
+  const closing = game.turn === -game.firstOf(game.round); // 本轮后手下完,要结算
+  const before = game.captures, was = game.count();
   game.endTurn();
   last = null;
   const now = game.count();
-  if (side === -1 || game.resolve === "turn") {
+  if (closing || game.resolve === "turn") {
     const gain = (x) => (x >= 0 ? `+${x}` : `${x}`);
     log(`结算：橙 ${now.a}（${gain(now.a - was.a)}） 青 ${now.b}（${gain(now.b - was.b)}）`
       + (game.captures > before ? `，易主 ${game.captures - before} 格` : ""));
@@ -207,6 +206,17 @@ function span(cls, text) {
   return s;
 }
 
+/** 一步的各方向搬运量:[方向, 数量];成对规则只有一个方向 */
+function stepArrows(s) {
+  if (s.spread) return s.spread.map((n, dir) => [dir, n]).filter(([, n]) => n > 0);
+  const dir = s.dst.r < s.src.r ? 0 : s.dst.c > s.src.c ? 1 : s.dst.r > s.src.r ? 2 : 3;
+  return [[dir, s.moved]];
+}
+
+const STEP_DIRS = [[-1, 0], [0, 1], [1, 0], [0, -1]];
+const isReceiver = (s, r, c) =>
+  stepArrows(s).some(([dir]) => s.src.r + STEP_DIRS[dir][0] === r && s.src.c + STEP_DIRS[dir][1] === c);
+
 function render() {
   const placing = humanPlacing();
 
@@ -246,10 +256,9 @@ function render() {
     if (placing && game.canAdd(r, c)) d.classList.add("legal");
     if (last && last.src.r === r && last.src.c === c) {
       d.classList.add("src");
-      const dir = last.dst.r < r ? 0 : last.dst.c > c ? 1 : last.dst.r > r ? 2 : 3;
-      d.append(span(`arrow d${dir}`, `${ARROWS[dir]}${last.moved}`));
+      for (const [dir, n] of stepArrows(last)) d.append(span(`arrow d${dir}`, `${ARROWS[dir]}${n}`));
     }
-    if (last && last.dst.r === r && last.dst.c === c) d.classList.add("dst");
+    if (last && isReceiver(last, r, c)) d.classList.add("dst");
   }
 
   const { a, b, open } = game.count();
@@ -270,7 +279,7 @@ function render() {
       : `<b class="${cls(game.winner)}">${NAME[game.winner]}获胜</b>，${a} : ${b}。`;
   } else if (phase === "flow") {
     st.innerHTML = last
-      ? `${head} 扩散第 <b>${flowSteps}</b> 步：(${last.src.r},${last.src.c}) → (${last.dst.r},${last.dst.c}) 搬运 <b>${last.moved}</b>${paused ? " · 已暂停" : ""}`
+      ? `${head} 扩散第 <b>${flowSteps}</b> 步：(${last.src.r},${last.src.c}) 给出 <b>${last.moved}</b>（${stepArrows(last).map(([d, n]) => ARROWS[d] + n).join(" ")}）${paused ? " · 已暂停" : ""}`
       : `${head} 扩散中…`;
   } else if (botPlays()) {
     st.innerHTML = `${head} ${game.placed.length ? "已放好" : "思考中…"}`;
@@ -289,7 +298,7 @@ function render() {
 }
 
 $("new").addEventListener("click", newGame);
-for (const id of ["size", "rounds", "budget", "ratio", "walls", "rival"])
+for (const id of ["size", "rounds", "budget", "walls", "rival"])
   $(id).addEventListener("change", newGame);
 
 newGame();

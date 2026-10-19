@@ -1,23 +1,23 @@
 /**
- * 擴散對戰(草案 3)— 分配泉量 + 兩層水 + 倍數奪格
+ * 擴散對戰(草案 4)— 分配泉量 + 兩層水 + 3×3 奪格
  *
- * 兩方各有一層水,每層都是一塊 Ver.1.1 的 DiffusionBoard,互不干擾地擴散;
+ * 兩方各有一層水,每層都是一塊用 Ver.2 鄰域規則的 DiffusionBoard,互不干擾地擴散;
  * 牆對兩層相同。同一格可以同時有兩方的水。
  *
  * 回合:每回合得到 budget 個泉,自由分配 —— 每放 1 個泉,該格己方水量 +1(單格上限 9)。
  * 可以全壓在一格,也可以每格放 1,或任意拆分。不能放在牆或對方佔領的格上。
  * 確認後只有落子方那一層擴散到靜止(泉是一次性倒下的水,之後不再補)。
  *
- * 歸屬在盤面靜止時結算,對每一格(己方值 x、對方值 y):
- *  - x > 0 且 x ≥ ratio·y  → 歸己方(y = 0 時任何正值即可佔領)
- *  - 雙方都不滿足           → sticky 時維持原主,否則變為無主
+ * 歸屬在盤面靜止時結算:比較每一格 3×3 範圍內(含本格)雙方的水量總和,
+ * 多的一方佔有;相等則僵持,維持原主(原本無主的仍無主)。
  * resolve = "round" 時一輪(雙方各一回合)結束才結算;"turn" 時每回合結束都結算。
+ * alternate 時每輪交換先手(橙青、青橙、橙青……),否則每輪都是橙先。
  *
  * 一輪結束時佔領過半者勝;否則打滿 maxRounds 後比佔領格數。
  */
 
 import { DiffusionBoard, WALL } from "./diffusion.ts";
-import type { Pos, StepResult, Strategy } from "./diffusion.ts";
+import type { Pos, Rule, StepResult, Strategy } from "./diffusion.ts";
 
 export type Side = 1 | -1;
 export type Owner = Side | 0;
@@ -28,9 +28,9 @@ export interface DuelStep extends StepResult { side: Side }
 export interface DuelOptions {
   maxRounds?: number;
   budget?: number;
-  ratio?: number;
-  sticky?: boolean;
   resolve?: ResolveMode;
+  alternate?: boolean;
+  rule?: Rule;
   walls?: Pos[];
   strategy?: Strategy;
 }
@@ -42,9 +42,9 @@ export class DuelGame {
   readonly cols: number;
   readonly maxRounds: number;
   readonly budget: number;
-  readonly ratio: number;
-  readonly sticky: boolean;
   readonly resolve: ResolveMode;
+  readonly alternate: boolean;
+  readonly rule: Rule;
   readonly strategy: Strategy;
 
   private orange: DiffusionBoard;
@@ -67,12 +67,12 @@ export class DuelGame {
     this.cols = cols;
     this.maxRounds = opts.maxRounds ?? 12;
     this.budget = opts.budget ?? 9;
-    this.ratio = opts.ratio ?? 1.5;
-    this.sticky = opts.sticky ?? true;
     this.resolve = opts.resolve ?? "round";
+    this.alternate = opts.alternate ?? true;
+    this.rule = opts.rule ?? "block";
     this.strategy = opts.strategy ?? "fifo";
-    this.orange = new DiffusionBoard(rows, cols);
-    this.cyan = new DiffusionBoard(rows, cols);
+    this.orange = new DiffusionBoard(rows, cols, undefined, this.rule);
+    this.cyan = new DiffusionBoard(rows, cols, undefined, this.rule);
     this.owners = new Array(rows * cols).fill(0);
     this.left = this.budget;
     for (const w of opts.walls ?? []) {
@@ -83,8 +83,8 @@ export class DuelGame {
 
   clone(): DuelGame {
     const g = new DuelGame(this.rows, this.cols, {
-      maxRounds: this.maxRounds, budget: this.budget, ratio: this.ratio,
-      sticky: this.sticky, resolve: this.resolve, strategy: this.strategy,
+      maxRounds: this.maxRounds, budget: this.budget,
+      resolve: this.resolve, alternate: this.alternate, rule: this.rule, strategy: this.strategy,
     });
     g.orange = this.orange.clone();
     g.cyan = this.cyan.clone();
@@ -96,6 +96,11 @@ export class DuelGame {
     g.winner = this.winner;
     g.captures = this.captures;
     return g;
+  }
+
+  /** 該輪的先手 */
+  firstOf(round: number): Side {
+    return this.alternate && round % 2 === 0 ? -1 : 1;
   }
 
   private layer(side: Side): DiffusionBoard {
@@ -176,18 +181,21 @@ export class DuelGame {
     return this.layer(this.turn).settle(this.strategy).length;
   }
 
-  /** 靜止時結算歸屬(倍數奪格) */
+  /** side 一方在該格 3×3 範圍內(含本格)的水量總和 */
+  blockSum(r: number, c: number, side: Side): number {
+    const b = this.layer(side);
+    return b.get(r, c) + b.neighborhoodSum(r, c);
+  }
+
+  /** 靜止時結算歸屬:3×3 內水多的一方佔有,相等僵持 */
   resolveOwners(): void {
     for (let r = 0; r < this.rows; r++)
       for (let c = 0; c < this.cols; c++) {
         if (this.isWall(r, c)) continue;
         const i = r * this.cols + c;
-        const a = this.orange.get(r, c), b = this.cyan.get(r, c);
-        const wantA = a > 0 && a >= this.ratio * b;
-        const wantB = b > 0 && b >= this.ratio * a;
+        const a = this.blockSum(r, c, 1), b = this.blockSum(r, c, -1);
         const cur = this.owners[i];
-        const next: Owner =
-          wantA === wantB ? (this.sticky ? cur : 0) : wantA ? 1 : -1;
+        const next: Owner = a > b ? 1 : b > a ? -1 : cur;
         if (cur !== 0 && next === -cur) this.captures++;
         this.owners[i] = next;
       }
@@ -195,17 +203,18 @@ export class DuelGame {
 
   /** 盤面靜止後調用:結算歸屬、判定勝負、換手。沒用完的泉作廢 */
   endTurn(): void {
-    if (this.resolve === "turn" || this.turn === -1) this.resolveOwners();
+    const closing = this.turn === -this.firstOf(this.round); // 本輪後手下完,一輪結束
+    if (this.resolve === "turn" || closing) this.resolveOwners();
     const { a, b, open } = this.count();
     const byCount = (): Owner => (a > b ? 1 : b > a ? -1 : 0);
-    if (this.turn === -1) {
+    if (closing) {
       if (a * 2 > open) this.winner = 1;
       else if (b * 2 > open) this.winner = -1;
       else if (this.round >= this.maxRounds) this.winner = byCount();
       else this.round++;
     }
     if (this.winner !== null) return;
-    this.turn = this.turn === 1 ? -1 : 1;
+    this.turn = closing ? this.firstOf(this.round) : this.turn === 1 ? -1 : 1;
     this.left = this.budget;
     this.placed = [];
   }

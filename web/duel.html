@@ -10,8 +10,8 @@
 </head>
 <body class="duel">
 <header>
-  <h1>扩散对战 <span>草案 3</span> <a class="nav" href="index.html">沙盘 →</a></h1>
-  <p>每回合有固定数量的泉，可以全压在一格，也可以分到多格。确认后你的水扩散一次；同一格里谁的水达到对方的若干倍，谁才能占下或夺走它。</p>
+  <h1>扩散对战 <span>草案 4</span> <a class="nav" href="index.html">沙盘 →</a></h1>
+  <p>每回合有固定数量的泉，可以全压在一格，也可以分到多格。确认后你的水按邻域规则扩散；每一格归 3×3 范围内水多的一方，相等则僵持。</p>
 </header>
 
 <main>
@@ -40,14 +40,6 @@
         <option value="9" selected>9</option>
         <option value="12">12</option>
         <option value="18">18</option>
-      </select>
-    </label>
-    <label class="field">夺格倍数
-      <select id="ratio">
-        <option value="1">1 倍（水多即可）</option>
-        <option value="1.5" selected>1.5 倍</option>
-        <option value="2">2 倍</option>
-        <option value="3">3 倍</option>
       </select>
     </label>
     <label class="field">墙
@@ -96,8 +88,8 @@
       <button id="skip">跳到结束</button>
     </div>
     <div class="legend">
-      <span><i class="k own"></i>已占领：大字是占领方的水量，右下角小字是对方渗入的水量</span>
-      <span><i class="k con"></i>无主：水刚流到、一轮结束才结算；或两方水量并列，谁也没到倍数</span>
+      <span><i class="k own"></i>已占领：大字是占领方在本格的水量，右下角小字是对方在本格的水量（归属看的是 3×3 总和）</span>
+      <span><i class="k con"></i>无主：水刚流到、一轮结束才结算；或 3×3 内双方水量相等</span>
     </div>
   </section>
 
@@ -105,9 +97,9 @@
     <h2>规则</h2>
     <ol class="rules">
       <li>每回合得到固定数量的泉。点一下格子放 1 个泉（该格己方水量 +1，单格最多 9），可叠放也可分散。不能放在墙或对方占领的格上。</li>
-      <li>确认后，你的水按扩散规则流到静止：值最大的可扩散格按 上→右→下→左 找第一个差 &gt; 1 的邻格，搬运 ⌊差/2⌋。两方的水互不阻挡。</li>
-      <li>一轮（双方各一回合）结束时逐格结算：一方水量 &gt; 0 且不少于对方的<b id="r-ratio">1.5</b> 倍，这格归它。</li>
-      <li>双方都不到倍数时维持原主；原本无主的继续无主（争夺中）。</li>
+      <li>确认后你的水扩散到静止：一格的水多于周围 8 格之和时，逐个按 上→右→下→左 轮流给四邻（只给比它至少低 2 的），直到不多于周围之和。周围无水时，8 变成中心 4、四邻各 1；7 变成中心 3、四邻各 1。两方的水互不阻挡。</li>
+      <li>一轮（双方各一回合）结束时逐格结算：比较这一格 3×3 范围内（含本格）双方的水量总和，多的一方占有；相等则僵持，维持原主。</li>
+      <li>每轮交换先手：橙青、青橙、橙青……</li>
       <li>结算后占领过半者立刻获胜；否则打满回合后格数多者胜。</li>
     </ol>
     <h2>本局</h2>

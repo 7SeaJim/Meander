@@ -57,7 +57,7 @@ function suite(label, n, opts) {
   series("三堆3", "贪心", few, n, opts);
 }
 
-const base = { maxRounds: 8, budget: 9, ratio: 2, sticky: true, resolve: "round" };
-suite("9×9 默认: 每回合 9 泉, 2 倍夺格, 一轮结算一次", 9, base);
-suite("9×9 每回合结束都结算", 9, { ...base, resolve: "turn" });
-suite("9×9 1.5 倍夺格", 9, { ...base, ratio: 1.5 });
+const base = { maxRounds: 8, budget: 9, resolve: "round", alternate: true };
+suite("9×9 默认: Ver.2 邻域规则, 3×3 夺格, 一轮结算, 每轮交换先手", 9, base);
+suite("9×9 不交换先手", 9, { ...base, alternate: false });
+suite("13×13, 12 轮", 13, { ...base, maxRounds: 12 });

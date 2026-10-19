@@ -1,12 +1,21 @@
 /**
- * 擴散規則 Ver.1.1 — TypeScript 引擎
+ * 擴散規則 — TypeScript 引擎
  *
- * 規則:
+ * 共同:
  *  - 每格存 0–9,WALL(-1) 為牆
- *  - 一次擴散 = 一對格子:主格依 上→右→下→左 找第一個差 >1 的鄰居,
- *    搬運 floor((a-b)/2) 使差 ≤1
  *  - 每次擴散後重新全盤選值最大的可擴散格;同值平手由調度策略決定
  *  - 無可擴散格時演化結束
+ *
+ * Ver.1.1 成對規則(rule = "pair"):
+ *  - 一次擴散 = 一對格子:主格依 上→右→下→左 找第一個差 >1 的鄰居,
+ *    搬運 floor((a-b)/2) 使差 ≤1
+ *
+ * Ver.2 鄰域規則(rule = "block"):
+ *  - N = 本格周圍 3×3 的 8 格(不含本格,牆與界外不計)之和
+ *  - 本格 a > N 時可擴散:每次給出 1,按 上→右→下→左 輪流給四鄰,
+ *    直到 a ≤ N。周圍原本無水時,2n 停在 n,2n+1 停在 n(如 7 → 3,四鄰各 1)
+ *  - 只給比本格至少低 2 的鄰格(a − b > 1),保證平方和嚴格遞減、必然停機;
+ *    否則一格寬的死胡同裡 2、1 兩格會無限來回
  *
  * 附帶:
  *  - steadyState(): 反覆注入直到不動點(吸引子)
@@ -18,6 +27,7 @@
 export const WALL = -1;
 
 export type Strategy = "scan" | "fifo" | "lifo";
+export type Rule = "pair" | "block";
 
 export interface Pos { r: number; c: number }
 
@@ -25,6 +35,8 @@ export interface StepResult {
   src: Pos;
   dst: Pos;
   moved: number;      // 本次搬運量
+  /** 鄰域規則:按 上、右、下、左 各給出多少;成對規則不填 */
+  spread?: number[];
 }
 
 export interface Source { pos: Pos; value: number }
@@ -40,10 +52,12 @@ export class DiffusionBoard {
   private grid: number[];      // 扁平存儲 r*cols+c
   private changed: number[];   // 每格最後變動的邏輯時鐘,供 FIFO/LIFO 平手裁決
   private clock = 1;
+  rule: Rule;
 
-  constructor(rows: number, cols: number, init?: number[][]) {
+  constructor(rows: number, cols: number, init?: number[][], rule: Rule = "pair") {
     this.rows = rows;
     this.cols = cols;
+    this.rule = rule;
     this.grid = new Array(rows * cols).fill(0);
     this.changed = new Array(rows * cols).fill(0);
     if (init) {
@@ -62,7 +76,7 @@ export class DiffusionBoard {
   }
 
   clone(): DiffusionBoard {
-    const b = new DiffusionBoard(this.rows, this.cols);
+    const b = new DiffusionBoard(this.rows, this.cols, undefined, this.rule);
     b.grid = this.grid.slice();
     b.changed = this.changed.slice();
     b.clock = this.clock;
@@ -85,10 +99,24 @@ export class DiffusionBoard {
     return r >= 0 && r < this.rows && c >= 0 && c < this.cols;
   }
 
-  /** 可擴散:存在非牆鄰居使 a − b > 1 */
+  /** 周圍 3×3 的 8 格之和(牆與界外不計) */
+  neighborhoodSum(r: number, c: number): number {
+    let n = 0;
+    for (let dr = -1; dr <= 1; dr++)
+      for (let dc = -1; dc <= 1; dc++) {
+        if ((dr || dc) && this.inBounds(r + dr, c + dc)) {
+          const v = this.get(r + dr, c + dc);
+          if (v !== WALL) n += v;
+        }
+      }
+    return n;
+  }
+
+  /** 可擴散:存在非牆鄰居使 a − b > 1;鄰域規則另需 a > N */
   isDiffusible(r: number, c: number): boolean {
     const a = this.get(r, c);
     if (a === WALL) return false;
+    if (this.rule === "block" && a <= this.neighborhoodSum(r, c)) return false;
     for (const [dr, dc] of DIRS) {
       const rr = r + dr, cc = c + dc;
       if (!this.inBounds(rr, cc)) continue;
@@ -117,10 +145,11 @@ export class DiffusionBoard {
     return best ? { r: best.r, c: best.c } : null;
   }
 
-  /** 執行一次成對擴散;無可擴散格時返回 null */
+  /** 執行一次擴散;無可擴散格時返回 null */
   step(strategy: Strategy = "fifo"): StepResult | null {
     const src = this.pickSource(strategy);
     if (!src) return null;
+    if (this.rule === "block") return this.blockStep(src);
     const a = this.get(src.r, src.c);
     for (const [dr, dc] of DIRS) {
       const rr = src.r + dr, cc = src.c + dc;
@@ -133,6 +162,31 @@ export class DiffusionBoard {
       return { src, dst: { r: rr, c: cc }, moved };
     }
     return null; // 理論上不可達:isDiffusible 已保證有方向
+  }
+
+  /** 鄰域規則的一次擴散:主格逐個給出,按 上→右→下→左 輪流,直到 a ≤ N */
+  private blockStep(src: Pos): StepResult {
+    let a = this.get(src.r, src.c);
+    let n = this.neighborhoodSum(src.r, src.c);
+    const spread = [0, 0, 0, 0];
+    let d = 0, first: Pos | null = null;
+    while (a > n) {
+      let gave = false;
+      for (let k = 0; k < 4 && !gave; k++) {
+        const dir = (d + k) % 4, [dr, dc] = DIRS[dir];
+        const rr = src.r + dr, cc = src.c + dc;
+        if (!this.inBounds(rr, cc)) continue;
+        const b = this.get(rr, cc);
+        if (b === WALL || a - b <= 1) continue;
+        this.set(rr, cc, b + 1);
+        a--; n++; spread[dir]++; d = dir + 1; gave = true;
+        first ??= { r: rr, c: cc };
+      }
+      if (!gave) break;
+    }
+    this.set(src.r, src.c, a);
+    const moved = spread.reduce((x, y) => x + y, 0);
+    return { src, dst: first!, moved, spread };
   }
 
   /** 跑到演化結束,返回全部步驟(可作 combo 計分或動畫腳本) */

@@ -14,6 +14,7 @@ const state = {
   digit: 9,
   tool: "digit", // digit | wall | source
   strategy: "fifo",
+  rule: "block", // block = Ver.2 邻域规则,pair = Ver.1.1 成对规则
   timer: null,
   steps: 0,
   moved: 0,
@@ -26,7 +27,7 @@ const key = (r, c) => `${r},${c}`;
 function exampleLayout() {
   state.rows = 7;
   state.cols = 7;
-  state.board = new DiffusionBoard(7, 7);
+  state.board = new DiffusionBoard(7, 7, undefined, state.rule);
   state.sources.clear();
   for (let r = 1; r <= 5; r++) state.board.set(r, 3, WALL); // 一道竖墙,上下各留缺口
   state.board.set(3, 0, 9);
@@ -35,7 +36,7 @@ function exampleLayout() {
 
 function resize(rows, cols) {
   const old = state.board;
-  const next = new DiffusionBoard(rows, cols);
+  const next = new DiffusionBoard(rows, cols, undefined, state.rule);
   for (let r = 0; r < Math.min(rows, state.rows); r++)
     for (let c = 0; c < Math.min(cols, state.cols); c++) next.set(r, c, old.get(r, c));
   for (const k of [...state.sources.keys()]) {
@@ -216,6 +217,17 @@ function prediction() {
   return { pred, miss };
 }
 
+/** 一步的各方向搬运量:[方向, 数量];成对规则只有一个方向 */
+function stepArrows(s) {
+  if (s.spread) return s.spread.map((n, dir) => [dir, n]).filter(([, n]) => n > 0);
+  const dir = s.dst.r < s.src.r ? 0 : s.dst.c > s.src.c ? 1 : s.dst.r > s.src.r ? 2 : 3;
+  return [[dir, s.moved]];
+}
+
+const STEP_DIRS = [[-1, 0], [0, 1], [1, 0], [0, -1]];
+const isReceiver = (s, r, c) =>
+  stepArrows(s).some(([dir]) => s.src.r + STEP_DIRS[dir][0] === r && s.src.c + STEP_DIRS[dir][1] === c);
+
 function render() {
   const b = state.board;
   const cone = prediction();
@@ -235,13 +247,14 @@ function render() {
 
     if (last && last.src.r === r && last.src.c === c) {
       d.classList.add("src");
-      const dir = last.dst.r < r ? 0 : last.dst.c > c ? 1 : last.dst.r > r ? 2 : 3;
-      const a = document.createElement("span");
-      a.className = `arrow d${dir}`;
-      a.textContent = `${ARROWS[dir]}${last.moved}`;
-      d.append(a);
+      for (const [dir, n] of stepArrows(last)) {
+        const a = document.createElement("span");
+        a.className = `arrow d${dir}`;
+        a.textContent = `${ARROWS[dir]}${n}`;
+        d.append(a);
+      }
     }
-    if (last && last.dst.r === r && last.dst.c === c) d.classList.add("dst");
+    if (last && isReceiver(last, r, c)) d.classList.add("dst");
 
     if (cone && !wall) {
       const p = document.createElement("span");
@@ -263,6 +276,8 @@ function render() {
     x.classList.toggle("on", x.dataset.tool === state.tool);
   for (const x of $("strategy").children)
     x.classList.toggle("on", x.dataset.s === state.strategy);
+  for (const x of $("rule").children)
+    x.classList.toggle("on", x.dataset.rule === state.rule);
 
   const done = b.pickSource(state.strategy) === null;
   const parts = [];
@@ -305,6 +320,13 @@ for (const x of document.querySelectorAll(".tool"))
   x.addEventListener("click", () => pickTool(x.dataset.tool));
 for (const x of $("strategy").children)
   x.addEventListener("click", () => { state.strategy = x.dataset.s; render(); });
+for (const x of $("rule").children)
+  x.addEventListener("click", () => {
+    stop();
+    state.rule = state.board.rule = x.dataset.rule;
+    resetCount();
+    render();
+  });
 
 $("step").addEventListener("click", () => { stop(); stepOnce(); });
 $("play").addEventListener("click", () => { if (state.timer) { stop(); render(); } else play(); });
